@@ -28,7 +28,7 @@ f = files[0]
 filename = os.path.basename(f)  # remove o caminho
 participant = filename.split("-")[0]
 label = filename.split("-")[1]
-category = filename.split("-")[2].rstrip("123")
+category = filename.split("-")[2].rstrip("123").rstrip("_MetaWear_2019")
 
 df = pd.read_csv(f)
 
@@ -40,6 +40,33 @@ df["category"] = category
 # Read all files
 # --------------------------------------------------------------
 
+acc_df = pd.DataFrame()
+gyro_df = pd.DataFrame()
+
+acc_set = 1  # counter individual
+gyro_set = 1
+
+for f in files:
+    filename = os.path.basename(f)  # remove o caminho
+    participant = filename.split("-")[0]
+    label = filename.split("-")[1]
+    category = filename.split("-")[2].rstrip("123").rstrip("_MetaWear_2019")
+
+    df = pd.read_csv(f)
+
+    df["participant"] = participant
+    df["label"] = label
+    df["category"] = category
+
+    if "Accelerometer" in f:
+        df["set"] = acc_set
+        acc_set += 1
+        acc_df = pd.concat([acc_df, df])  # concat junta o df ao acc_df e constroi o df
+
+    if "Gyroscope" in f:
+        df["set"] = gyro_set
+        gyro_set += 1
+        gyro_df = pd.concat([gyro_df, df])
 
 # --------------------------------------------------------------
 # Working with datetimes
