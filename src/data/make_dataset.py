@@ -174,7 +174,12 @@ data_resampled = pd.concat(
     [df.resample(rule="200ms").apply(sampling).dropna() for df in days]
 )
 
+data_resampled["set"] = data_resampled["set"].astype(int)
 
 # --------------------------------------------------------------
 # Export dataset
 # --------------------------------------------------------------
+
+data_resampled.to_pickle(
+    "../../data/interim/01_data_processed.pkl"
+)  # to pickle guarda o df serializado, ao abrir o ficheiro vai estar direito e como foi salvo (especialmente bom para datas)
