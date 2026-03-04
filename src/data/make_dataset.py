@@ -139,9 +139,9 @@ data_merged.columns = [
     "gyro_x",
     "gyro_y",
     "gyro_z",
+    "participant",
     "label",
     "category",
-    "participant",
     "set",
 ]
 
