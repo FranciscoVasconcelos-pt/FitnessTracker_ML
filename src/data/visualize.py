@@ -136,13 +136,11 @@ ax[0].set_title(
 ax[0].set_ylabel("Acceleration (g)", fontsize=12)
 ax[0].legend(loc="upper right", ncol=3)
 
-# Plot Gyroscope Data
+# gyroscope Data
 combined_plot_df[["gyro_x", "gyro_y", "gyro_z"]].plot(ax=ax[1], color=colors, alpha=0.8)
 ax[1].set_ylabel("Gyroscope (deg/s)", fontsize=12)
 ax[1].set_xlabel("Samples", fontsize=12)
 ax[1].legend(loc="upper right", ncol=3)
-
-# Tighten layout and add a subtle grid
 plt.tight_layout()
 plt.subplots_adjust(hspace=0.15)  # Reduce space between subplots
 plt.show()
