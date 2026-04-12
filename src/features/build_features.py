@@ -15,7 +15,7 @@ predictor_columns = list(df.columns[:6])
 plt.style.use("fivethirtyeight")
 plt.rcParams["figure.figsize"] = (20, 5)
 plt.rcParams["figure.dpi"] = 100
-plt.rcParams["lines.lineswidth"] = 2
+plt.rcParams["lines.linewidth"] = 2
 # --------------------------------------------------------------
 # Dealing with missing values (imputation)
 # --------------------------------------------------------------
@@ -81,7 +81,9 @@ gyro_r = (
 df_squared["acc_r"] = np.sqrt(acc_r)
 df_squared["gyro_r"] = np.sqrt(gyro_r)
 
-df_squared
+subset = df_squared[df_squared["set"] == 14]
+subset[["acc_r", "gyro_r"]].plot(subplots=True)
+
 # --------------------------------------------------------------
 # Temporal abstraction
 # --------------------------------------------------------------
