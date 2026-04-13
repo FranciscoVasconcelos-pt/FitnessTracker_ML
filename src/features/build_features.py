@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from DataTransformation import LowPassFilter, PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
 from FrequencyAbstraction import FourierTransformation
+from sklearn.cluster import KMeans
 
 # --------------------------------------------------------------
 # Load data
@@ -133,13 +134,58 @@ df_freq = pd.concat(df_freq_list).set_index("epoch (ms)", drop=True)
 # --------------------------------------------------------------
 # Dealing with overlapping windows
 # --------------------------------------------------------------
-
+df_freq = df_freq.dropna()
+df_freq = df_freq.iloc[
+    ::2
+]  # quero todas as colunas de dois em dois, ou seja, corto o df em dois
 
 # --------------------------------------------------------------
 # Clustering
 # --------------------------------------------------------------
+df_cluster = df_freq.copy()
+cluster_columns = ["acc_x", "acc_y", "acc_z"]
+k_values = range(2, 10)
+inertias = []
 
+for k in k_values:
+    subset = df_cluster[cluster_columns]
+    kmeans = KMeans(n_clusters=k, n_init=20, random_state=0)
+    cluster_labels = kmeans.fit_predict(subset)
+    inertias.append(kmeans.inertia_)  # inertia é a distancia ao centro do cluster
 
+plt.figure(figsize=(10, 10))
+plt.plot(k_values, inertias)
+plt.xlabel("k")
+plt.ylabel("sum of squared distances (inertia)")  # encontrar o elbow para escolher o k
+plt.show()
+
+kmeans = KMeans(n_clusters=5, n_init=20, random_state=0)
+subset = df_cluster[cluster_columns]
+df_cluster["cluster"] = kmeans.fit_predict(subset)
+
+fig = plt.figure(figsize=(15, 15))
+ax = fig.add_subplot(projection="3d")
+for c in df_cluster["cluster"].unique():
+    subset = df_cluster[df_cluster["cluster"] == c]
+    ax.scatter(subset["acc_x"], subset["acc_y"], subset["acc_z"], label=c)
+ax.set_xlabel("X-axis")
+ax.set_ylabel("y-axis")
+ax.set_zlabel("z-axis")
+plt.legend()
+plt.show()
+
+fig = plt.figure(figsize=(15, 15))
+ax = fig.add_subplot(projection="3d")
+for l in df_cluster["label"].unique():
+    subset = df_cluster[df_cluster["label"] == l]
+    ax.scatter(subset["acc_x"], subset["acc_y"], subset["acc_z"], label=l)
+ax.set_xlabel("X-axis")
+ax.set_ylabel("y-axis")
+ax.set_zlabel("z-axis")
+plt.legend()
+plt.show()
 # --------------------------------------------------------------
 # Export dataset
 # --------------------------------------------------------------
+
+df_cluster.to_pickle("../../data/interim/03_data_features.pkl")
