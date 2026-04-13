@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from DataTransformation import LowPassFilter, PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
-
+from FrequencyAbstraction import FourierTransformation
 
 # --------------------------------------------------------------
 # Load data
@@ -113,7 +113,22 @@ df_temporal = pd.concat(df_temporal_list)  # para cada set adicionamos a mean e 
 # --------------------------------------------------------------
 # Frequency features
 # --------------------------------------------------------------
+df_freq = df_temporal.copy().reset_index()
+FreqAbs = FourierTransformation()
 
+fs = int(1000 / 200)
+ws = int(2000 / 200)
+
+df_freq = FreqAbs.abstract_frequency(df_freq, ["acc_y"], ws, fs)
+
+df_freq_list = []
+for s in df_freq["set"].unique():
+    print(f"Applying Fourier Transformation to set {s}")
+    subset = df_freq[df_freq["set"] == s].reset_index(drop=True).copy()
+    subset = FreqAbs.abstract_frequency(subset, predictor_columns, ws, fs)
+    df_freq_list.append(subset)
+
+df_freq = pd.concat(df_freq_list).set_index("epoch (ms)", drop=True)
 
 # --------------------------------------------------------------
 # Dealing with overlapping windows
