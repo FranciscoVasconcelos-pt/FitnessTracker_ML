@@ -2,7 +2,7 @@
 
 Projeto de aprendizagem em **Machine Learning aplicado a sensores wearables** para reconhecer exercícios de ginásio e contar repetições a partir de dados de acelerómetro e giroscópio.
 
-O pipeline processa gravações do sensor **MetaMotion (MetaWear)**, extrai features temporais e de frequência, treina classificadores para identificar o exercício em curso e usa deteção de picos para estimar o número de reps por set.
+O pipeline processa gravações do sensor **MetaMotion (MetaWear)**, extrai features temporais e de frequência, treina um classificador Random Forest para identificar o exercício em curso e usa deteção de picos para estimar o número de reps por set.
 
 ---
 
@@ -12,7 +12,7 @@ O pipeline processa gravações do sensor **MetaMotion (MetaWear)**, extrai feat
 |---|---|
 | **Classificação de exercícios** | Prever qual exercício está a ser executado (`bench`, `squat`, `row`, `ohp`, `dead`, `rest`) |
 | **Contagem de repetições** | Estimar reps por set com filtro passa-baixo + deteção de máximos locais |
-| **Aprendizagem de conceitos** | Pipeline completo de data science: ingestão → limpeza → features → modelação → avaliação |
+| **Aprendizagem de conceitos** | Pipeline completo de data science: ingestão → limpeza → features → modelação → inferência |
 
 ---
 
@@ -20,8 +20,8 @@ O pipeline processa gravações do sensor **MetaMotion (MetaWear)**, extrai feat
 
 Os dados brutos estão em `data/raw/MetaMotion/MetaMotion/` e consistem em ficheiros CSV exportados do MetaMotion, com leituras de:
 
-- **Acelerómetro** — 12.5 Hz  
-- **Giroscópio** — 25 Hz  
+- **Acelerómetro** — 12.5 Hz
+- **Giroscópio** — 25 Hz
 
 ### Convenção de nomes dos ficheiros
 
@@ -46,6 +46,8 @@ MLFitnessTracker/
 ├── data/
 │   ├── raw/              # CSVs originais (MetaMotion)
 │   └── interim/          # Artefactos intermédios (.pkl) gerados pelo pipeline
+├── models/
+│   └── exercise_classifier.pkl   # Modelo treinado (gerado por save_model.py)
 ├── reports/
 │   └── figures/          # Gráficos exportados
 ├── references/
@@ -62,7 +64,9 @@ MLFitnessTracker/
 │   │   ├── TemporalAbstraction.py
 │   │   └── FrequencyAbstraction.py
 │   ├── models/
-│   │   ├── train_model.py        # Treino e comparação de modelos
+│   │   ├── train_model.py        # Treino completo e comparação de modelos
+│   │   ├── save_model.py         # Treino rápido + guardar modelo
+│   │   ├── predict_model.py      # Inferência com modelo guardado
 │   │   └── LearningAlgorithms.py # Wrapper dos classificadores sklearn
 │   └── visualization/
 │       └── plot_settings.py
@@ -86,21 +90,29 @@ conda env create -f environment.yml
 conda activate tracking-barbell-exercises
 ```
 
-Instalar dependências adicionais usadas no código (não incluídas no `environment.yml`):
+Se o ambiente já existir e faltarem dependências:
 
 ```bash
-pip install scikit-learn scipy seaborn
+conda env update -f environment.yml --prune
+```
+
+O `environment.yml` inclui `scipy`, `scikit-learn` e `seaborn`. Se o conda instalar `pandas 2.x` e surgirem warnings com sklearn, podes fixar:
+
+```bash
+conda install pandas=1.5.2 -n tracking-barbell-exercises
 ```
 
 ---
 
 ## Como executar o pipeline
 
-Correr os scripts **por ordem**, a partir da pasta onde se encontra cada ficheiro (os paths relativos assumem execução a partir de `src/`):
+Correr **por ordem**, a partir da **raiz do projeto**:
 
 ```bash
+conda activate tracking-barbell-exercises
+cd MLFitnessTracker
+
 # 1. Processar dados brutos → data/interim/01_data_processed.pkl
-#    (pode ser executado a partir de qualquer diretório)
 python src/data/make_dataset.py
 
 # 2. (Opcional) Explorar visualmente os dados
@@ -112,14 +124,27 @@ python src/features/remove_outliers.py
 # 4. Construir features → data/interim/03_data_features.pkl
 python src/features/build_features.py
 
-# 5. Treinar e comparar modelos
-python src/models/train_model.py
+# 5. Treinar e guardar modelo → models/exercise_classifier.pkl
+python src/models/save_model.py
 
-# 6. (Opcional) Contar repetições por set
-python src/features/count_repetitions.py
+# 6. Inferência com o modelo guardado
+python src/models/predict_model.py
+
+# 7. Contagem de repetições (output no terminal, sem gráficos)
+cd src/features
+python count_repetitions.py
+cd ../..
 ```
 
-> **Nota:** Os scripts foram escritos como pipelines lineares (estilo notebook). Abrem janelas de gráficos com `plt.show()` durante a execução.
+### Atalho: treino completo (opcional, demorado)
+
+O `train_model.py` compara vários classificadores (NN, RF, KNN, DT, NB) e abre gráficos interativos. Demora **30+ minutos**.
+
+```bash
+python src/models/train_model.py
+```
+
+No final também guarda o modelo em `models/exercise_classifier.pkl`.
 
 ---
 
@@ -130,8 +155,9 @@ python src/features/count_repetitions.py
 - Lê todos os CSVs de acelerómetro e giroscópio
 - Extrai metadados do nome do ficheiro (`participant`, `label`, `category`)
 - Emparelha ficheiros acc/gyro da mesma gravação pelo prefixo do nome
-- Reamostra cada sensor para **5 Hz** (intervalo de 200 ms) e faz join temporal (`inner join` no índice)
-- Atribui um `set` único por gravação emparelhada
+- Deduplica exports repetidos (versões 1.4.4 vs 1.4.41)
+- Reamostra cada sensor para **5 Hz** (200 ms) e faz join temporal
+- Atribui um `set` único por gravação emparelhada (~82 sets)
 - Exporta `01_data_processed.pkl`
 
 ### 2. Outliers (`remove_outliers.py`)
@@ -143,6 +169,8 @@ Compara três métodos de deteção:
 - **LOF** — Local Outlier Factor
 
 Outliers são substituídos por `NaN` (por label) e exportados em `02_outliers_removed_chauvenet.pkl`.
+
+> Abre muitas janelas de gráficos — fecha cada uma para o script continuar.
 
 ### 3. Features (`build_features.py`)
 
@@ -158,59 +186,76 @@ Outliers são substituídos por `NaN` (por label) e exportados em `02_outliers_r
 
 Exporta `03_data_features.pkl`.
 
-### 4. Modelação (`train_model.py`)
+### 4. Modelação
 
-**Classificadores comparados:**
+#### `save_model.py` (recomendado)
 
-- Neural Network (MLP)
-- Random Forest
-- K-Nearest Neighbors
-- Decision Tree
-- Naive Bayes
+- Treina **Random Forest** com `feature_set_4` (todas as features)
+- Split por participante: treino B–E, teste A
+- Guarda em `models/exercise_classifier.pkl` (~2–5 min)
 
-**Conjuntos de features testados:**
+#### `train_model.py` (exploração completa)
 
-1. Sensores base (acc + gyro)
-2. + magnitudes (`acc_r`, `gyro_r`)
-3. + features temporais
-4. + features de frequência + cluster
-5. Subset selecionado por forward selection
+- Compara NN, RF, KNN, Decision Tree, Naive Bayes
+- Testa 5 conjuntos de features
+- Forward selection + grid search
+- Matrizes de confusão e bar plots de accuracy
 
-**Avaliação:**
+### 5. Inferência (`predict_model.py`)
 
-- Split aleatório estratificado (75/25)
-- Split por participante (treino: B–E, teste: A) — avaliação mais realista para dados de sensores corporais
+- Carrega `models/exercise_classifier.pkl`
+- Prevê exercícios para o participante A (dados de teste)
+- Imprime accuracy geral, accuracy por exercício e tabela completa de previsões
 
-### 5. Contagem de reps (`count_repetitions.py`)
+### 6. Contagem de reps (`count_repetitions.py`)
 
 - Remove sets de `rest`
 - Aplica filtro passa-baixo ao sinal
 - Deteta picos com `scipy.signal.argrelextrema`
 - Compara com ground truth (5 reps heavy / 10 reps medium)
-- Calcula MAE (Mean Absolute Error)
+- Imprime **MAE** e tabela média por exercício/categoria (sem gráficos interativos)
+
+> Correr a partir de `src/features/` por causa dos imports locais.
 
 ---
 
-## Resultados esperados
+## Resultados obtidos
 
-Os scripts geram gráficos interativos durante a execução:
+| Métrica | Valor |
+|---|---|
+| **Classificação (participante A)** | ~99% accuracy |
+| **Contagem de reps (MAE)** | ~0.79 reps por set |
 
-- Boxplots e histogramas de outliers
-- Elbow plot para escolha de k no K-Means
-- Scatter 3D de clusters vs labels
-- Bar plot comparando accuracy por modelo e feature set
-- Matriz de confusão do melhor modelo
-- Gráficos de contagem de reps por exercício
+Accuracy por exercício (participante A):
 
-Figuras exportadas ficam em `reports/figures/` (via `visualize.py`).
+| Exercício | Accuracy |
+|---|---|
+| Bench Press | 100% |
+| Squat | 100% |
+| Row | 100% |
+| Deadlift | ~99% |
+| Rest | ~99% |
+| Overhead Press | ~98% |
+
+---
+
+## Artefactos gerados
+
+| Ficheiro | Gerado por |
+|---|---|
+| `data/interim/01_data_processed.pkl` | `make_dataset.py` |
+| `data/interim/02_outliers_removed_chauvenet.pkl` | `remove_outliers.py` |
+| `data/interim/03_data_features.pkl` | `build_features.py` |
+| `models/exercise_classifier.pkl` | `save_model.py` ou `train_model.py` |
+| `reports/figures/*.png` | `visualize.py` |
 
 ---
 
 ## Limitações conhecidas
 
-- **Data leakage:** o forward selection avalia no mesmo conjunto de treino; o split aleatório pode misturar janelas do mesmo set
-- **Sem inferência em produção:** não existe script `predict_model.py` nem modelo serializado
-- **Paths relativos:** resolvido com `pathlib` em todos os scripts
+- **Data leakage:** o forward selection em `train_model.py` avalia no mesmo conjunto de treino; o split aleatório pode misturar janelas do mesmo set
+- **Contagem de reps:** MAE de ~0.79 — row e ohp medium têm maior erro; `row` deveria usar `gyro_x` mas o loop usa `acc_r`
+- **Scripts exploratórios:** `remove_outliers.py`, `build_features.py` e `train_model.py` abrem gráficos interativos; `count_repetitions.py` corre sem janelas
 
 ---
 
