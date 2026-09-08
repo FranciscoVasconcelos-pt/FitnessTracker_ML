@@ -100,6 +100,7 @@ Correr os scripts **por ordem**, a partir da pasta onde se encontra cada ficheir
 
 ```bash
 # 1. Processar dados brutos → data/interim/01_data_processed.pkl
+#    (pode ser executado a partir de qualquer diretório)
 python src/data/make_dataset.py
 
 # 2. (Opcional) Explorar visualmente os dados
@@ -128,8 +129,9 @@ python src/features/count_repetitions.py
 
 - Lê todos os CSVs de acelerómetro e giroscópio
 - Extrai metadados do nome do ficheiro (`participant`, `label`, `category`)
-- Faz merge das leituras dos dois sensores
-- Reamostra para **5 Hz** (intervalo de 200 ms)
+- Emparelha ficheiros acc/gyro da mesma gravação pelo prefixo do nome
+- Reamostra cada sensor para **5 Hz** (intervalo de 200 ms) e faz join temporal (`inner join` no índice)
+- Atribui um `set` único por gravação emparelhada
 - Exporta `01_data_processed.pkl`
 
 ### 2. Outliers (`remove_outliers.py`)
@@ -206,11 +208,9 @@ Figuras exportadas ficam em `reports/figures/` (via `visualize.py`).
 
 ## Limitações conhecidas
 
-- **Merge acc/gyro:** o join atual é por posição de linha, não por timestamp alinhado — pode causar desalinhamento entre sensores
 - **Data leakage:** o forward selection avalia no mesmo conjunto de treino; o split aleatório pode misturar janelas do mesmo set
 - **Sem inferência em produção:** não existe script `predict_model.py` nem modelo serializado
-- **Paths relativos:** os scripts usam `../../data/...` e dependem do diretório de execução
-- **Ambiente incompleto:** `scikit-learn`, `scipy` e `seaborn` precisam de instalação manual
+- **Paths relativos:** `make_dataset.py` ainda usa `../../data/...`; os restantes scripts usam `pathlib`
 
 ---
 

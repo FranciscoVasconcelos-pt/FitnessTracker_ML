@@ -1,11 +1,14 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 from DataTransformation import LowPassFilter
 from scipy.signal import argrelextrema
 from sklearn.metrics import mean_absolute_error
 
 pd.options.mode.chained_assignment = None
+
+DATA_INTERIM = Path(__file__).resolve().parents[2] / "data" / "interim"
 
 
 # Plot settings
@@ -18,7 +21,7 @@ plt.rcParams["lines.linewidth"] = 2
 # --------------------------------------------------------------
 # Load data
 # --------------------------------------------------------------
-df = pd.read_pickle("../../data/interim/01_data_processed.pkl")
+df = pd.read_pickle(DATA_INTERIM / "01_data_processed.pkl")
 df = df[df["label"] != "rest"]
 
 acc_r = df["acc_x"] ** 2 + df["acc_y"] ** 2 + df["acc_z"] ** 2
@@ -79,13 +82,13 @@ LowPass.low_pass_filter(
 # --------------------------------------------------------------
 def count_reps(dataset, cutoff=0.4, order=10, column="acc_r"):
     data = LowPass.low_pass_filter(
-        dataset, col=column, sampling_frequency=fs, cutoff_frequency=0.4, order=10
+        dataset, col=column, sampling_frequency=fs, cutoff_frequency=cutoff, order=order
     )
     indexes = argrelextrema(data[column + "_lowpass"].values, np.greater)
     peaks = data.iloc[indexes]
 
     fig, ax = plt.subplots()
-    plt.plot(dataset[f"{column}_lowpass"])
+    plt.plot(data[f"{column}_lowpass"])
     plt.plot(peaks[f"{column}_lowpass"], "o", color="red")
     ax.set_ylabel(f"{column}_lowpass")
     exercise = dataset["label"].iloc[0].title()
@@ -107,7 +110,7 @@ count_reps(dead_set, cutoff=0.4)
 
 df["reps"] = df["category"].apply(lambda x: 5 if x == "heavy" else 10)
 rep_df = df.groupby(["label", "category", "set"])["reps"].max().reset_index()
-rep_df["pres_pred"] = 0
+rep_df["reps_pred"] = 0
 
 for s in df["set"].unique():
     subset = df[df["set"] == s]

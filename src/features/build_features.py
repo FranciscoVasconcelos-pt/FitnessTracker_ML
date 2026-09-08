@@ -1,15 +1,18 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 from DataTransformation import LowPassFilter, PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
 from FrequencyAbstraction import FourierTransformation
 from sklearn.cluster import KMeans
 
+DATA_INTERIM = Path(__file__).resolve().parents[2] / "data" / "interim"
+
 # --------------------------------------------------------------
 # Load data
 # --------------------------------------------------------------
-df = pd.read_pickle("../../data/interim/02_outliers_removed_chauvenet.pkl")
+df = pd.read_pickle(DATA_INTERIM / "02_outliers_removed_chauvenet.pkl")
 
 predictor_columns = list(df.columns[:6])
 
@@ -188,4 +191,4 @@ plt.show()
 # Export dataset
 # --------------------------------------------------------------
 
-df_cluster.to_pickle("../../data/interim/03_data_features.pkl")
+df_cluster.to_pickle(DATA_INTERIM / "03_data_features.pkl")

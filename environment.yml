@@ -17,6 +17,9 @@ dependencies:
   - python=3.8.15
   - pip
   - bottleneck
+  - scipy
+  - scikit-learn
+  - seaborn
   - pip:
       - numpy==1.23.5
       - pandas==1.5.2

@@ -3,12 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import scipy
+from pathlib import Path
 from sklearn.neighbors import LocalOutlierFactor  # pip install scikit-learn
+
+DATA_INTERIM = Path(__file__).resolve().parents[2] / "data" / "interim"
 
 # --------------------------------------------------------------
 # Load data
 # --------------------------------------------------------------
-df = pd.read_pickle("../../data/interim/01_data_processed.pkl")
+df = pd.read_pickle(DATA_INTERIM / "01_data_processed.pkl")
 outlier_columns = list(df.columns[:6])
 # --------------------------------------------------------------
 # Plotting outliers
@@ -279,4 +282,4 @@ for col in outlier_columns:
 # Export new dataframe
 # --------------------------------------------------------------
 
-outliers_removed_df.to_pickle("../../data/interim/02_outliers_removed_chauvenet.pkl")
+outliers_removed_df.to_pickle(DATA_INTERIM / "02_outliers_removed_chauvenet.pkl")

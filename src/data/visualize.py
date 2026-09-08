@@ -1,13 +1,17 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from pathlib import Path
 from IPython.display import display
 import seaborn as sns
+
+DATA_INTERIM = Path(__file__).resolve().parents[2] / "data" / "interim"
+REPORTS_FIGURES = Path(__file__).resolve().parents[2] / "reports" / "figures"
 
 # --------------------------------------------------------------
 # Load data
 # --------------------------------------------------------------
-df = pd.read_pickle("../../data/interim/01_data_processed.pkl")
+df = pd.read_pickle(DATA_INTERIM / "01_data_processed.pkl")
 
 # --------------------------------------------------------------
 # Plot single columns
@@ -194,5 +198,6 @@ for label in labels:
             )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-            plt.savefig(f"../../reports/figures/{label.title()} ({participant}).png")
+            REPORTS_FIGURES.mkdir(parents=True, exist_ok=True)
+            plt.savefig(REPORTS_FIGURES / f"{label.title()} ({participant}).png")
             plt.show()
