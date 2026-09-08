@@ -14,7 +14,7 @@ DATA_INTERIM = Path(__file__).resolve().parents[2] / "data" / "interim"
 # --------------------------------------------------------------
 df = pd.read_pickle(DATA_INTERIM / "02_outliers_removed_chauvenet.pkl")
 
-predictor_columns = list(df.columns[:6])
+predictor_columns = ["acc_x", "acc_y", "acc_z", "gyro_x", "gyro_y", "gyro_z"]
 
 plt.style.use("fivethirtyeight")
 plt.rcParams["figure.figsize"] = (20, 5)

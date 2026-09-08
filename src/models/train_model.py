@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from sklearn.model_selection import train_test_split
+import joblib
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 from LearningAlgorithms import ClassificationAlgorithms
 import seaborn as sns
@@ -9,6 +11,7 @@ import itertools
 from sklearn.metrics import accuracy_score, confusion_matrix
 
 DATA_INTERIM = Path(__file__).resolve().parents[2] / "data" / "interim"
+MODELS_DIR = Path(__file__).resolve().parents[2] / "models"
 
 # Plot settings
 plt.style.use("fivethirtyeight")
@@ -335,3 +338,37 @@ plt.ylabel("True label")
 plt.xlabel("Predicted label")
 plt.grid(False)
 plt.show()
+
+# --------------------------------------------------------------
+# Save best model for inference
+# --------------------------------------------------------------
+# Random Forest com feature_set_4, treinado no split por participante (B-E treino, A teste)
+
+tuned_parameters = [
+    {
+        "min_samples_leaf": [2, 10, 50, 100, 200],
+        "n_estimators": [10, 50, 100],
+        "criterion": ["gini", "entropy"],
+    }
+]
+rf_search = GridSearchCV(
+    RandomForestClassifier(), tuned_parameters, cv=5, scoring="accuracy"
+)
+rf_search.fit(np.ascontiguousarray(X_train[feature_set_4].to_numpy()), Y_train)
+
+test_accuracy = rf_search.score(
+    np.ascontiguousarray(X_test[feature_set_4].to_numpy()), Y_test
+)
+
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+model_path = MODELS_DIR / "exercise_classifier.pkl"
+joblib.dump(
+    {
+        "model": rf_search.best_estimator_,
+        "features": feature_set_4,
+        "test_participant": "A",
+        "test_accuracy": test_accuracy,
+    },
+    model_path,
+)
+print(f"Modelo guardado em {model_path} (test accuracy: {test_accuracy:.3f})")

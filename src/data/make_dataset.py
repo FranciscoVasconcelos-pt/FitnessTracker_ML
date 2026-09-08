@@ -1,24 +1,28 @@
 import pandas as pd
 from glob import glob
 import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+DATA_RAW = ROOT / "data" / "raw" / "MetaMotion" / "MetaMotion"
+DATA_INTERIM = ROOT / "data" / "interim"
 
 # --------------------------------------------------------------
 # Read single CSV file
 # --------------------------------------------------------------
 single_file_acc = pd.read_csv(
-    "../../data/raw/MetaMotion/MetaMotion/A-bench-heavy2-rpe8_MetaWear_2019-01-11T16.10.08.270_C42732BE255C_Accelerometer_12.500Hz_1.4.4.csv"
+    DATA_RAW / "A-bench-heavy2-rpe8_MetaWear_2019-01-11T16.10.08.270_C42732BE255C_Accelerometer_12.500Hz_1.4.4.csv"
 )
 
 single_file_gyro = pd.read_csv(
-    "../../data/raw/MetaMotion/MetaMotion/A-bench-heavy2-rpe8_MetaWear_2019-01-11T16.10.08.270_C42732BE255C_Gyroscope_25.000Hz_1.4.4.csv"
+    DATA_RAW / "A-bench-heavy2-rpe8_MetaWear_2019-01-11T16.10.08.270_C42732BE255C_Gyroscope_25.000Hz_1.4.4.csv"
 )
 # --------------------------------------------------------------
 # List all data in data/raw/MetaMotion
 # --------------------------------------------------------------
 files = glob(
-    "../../data/raw/MetaMotion/MetaMotion/*.csv"
-)  # todos os ficheiros csv dentro desta pasta, e acessiveis atraves de indice (como esta em baixo)
-len(files)
+    str(DATA_RAW / "*.csv")
+)  # todos os ficheiros csv dentro desta pasta, e acessiveis atraves de indice (como esta em baixo)len(files)
 # --------------------------------------------------------------
 # Extract features from filename
 # --------------------------------------------------------------
@@ -39,7 +43,7 @@ df["category"] = category
 # --------------------------------------------------------------
 # Turn into function
 # --------------------------------------------------------------
-files = glob("../../data/raw/MetaMotion/MetaMotion/*.csv")
+files = glob(str(DATA_RAW / "*.csv"))
 
 
 def parse_filename(filename):
@@ -186,6 +190,7 @@ data_resampled[:1000].resample(rule="200ms").apply(sampling)
 # Export dataset
 # --------------------------------------------------------------
 
+DATA_INTERIM.mkdir(parents=True, exist_ok=True)
 data_resampled.to_pickle(
-    "../../data/interim/01_data_processed.pkl"
+    DATA_INTERIM / "01_data_processed.pkl"
 )  # to pickle guarda o df serializado, ao abrir o ficheiro vai estar direito e como foi salvo (especialmente bom para datas)

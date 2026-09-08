@@ -210,7 +210,7 @@ Figuras exportadas ficam em `reports/figures/` (via `visualize.py`).
 
 - **Data leakage:** o forward selection avalia no mesmo conjunto de treino; o split aleatório pode misturar janelas do mesmo set
 - **Sem inferência em produção:** não existe script `predict_model.py` nem modelo serializado
-- **Paths relativos:** `make_dataset.py` ainda usa `../../data/...`; os restantes scripts usam `pathlib`
+- **Paths relativos:** resolvido com `pathlib` em todos os scripts
 
 ---
 

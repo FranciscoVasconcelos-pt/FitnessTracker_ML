@@ -24,6 +24,13 @@ import numpy as np
 import copy
 
 
+def as_contiguous_array(X):
+    # pandas 2.x DataFrames expose .flags without c_contiguous; sklearn KNN needs numpy arrays
+    if isinstance(X, pd.DataFrame):
+        return np.ascontiguousarray(X.to_numpy())
+    return np.ascontiguousarray(X)
+
+
 class ClassificationAlgorithms:
 
     # Forward selection for classification which selects a pre-defined number of features (max_features)
@@ -94,6 +101,8 @@ class ClassificationAlgorithms:
         gridsearch=True,
         print_model_details=False,
     ):
+        train_X = as_contiguous_array(train_X)
+        test_X = as_contiguous_array(test_X)
 
         if gridsearch:
             tuned_parameters = [
@@ -168,6 +177,9 @@ class ClassificationAlgorithms:
         gridsearch=True,
         print_model_details=False,
     ):
+        train_X = as_contiguous_array(train_X)
+        test_X = as_contiguous_array(test_X)
+
         # Create the model
         if gridsearch:
             tuned_parameters = [
@@ -215,6 +227,9 @@ class ClassificationAlgorithms:
         gridsearch=True,
         print_model_details=False,
     ):
+        train_X = as_contiguous_array(train_X)
+        test_X = as_contiguous_array(test_X)
+
         # Create the model
         if gridsearch:
             tuned_parameters = [
@@ -263,6 +278,9 @@ class ClassificationAlgorithms:
         gridsearch=True,
         print_model_details=False,
     ):
+        train_X = as_contiguous_array(train_X)
+        test_X = as_contiguous_array(test_X)
+
         # Create the model
         if gridsearch:
             tuned_parameters = [{"n_neighbors": [1, 2, 5, 10]}]
@@ -308,6 +326,10 @@ class ClassificationAlgorithms:
         export_tree_name="tree.dot",
         gridsearch=True,
     ):
+        feature_names = train_X.columns if isinstance(train_X, pd.DataFrame) else None
+        train_X = as_contiguous_array(train_X)
+        test_X = as_contiguous_array(test_X)
+
         # Create the model
         if gridsearch:
             tuned_parameters = [
@@ -356,7 +378,7 @@ class ClassificationAlgorithms:
             print("Feature importance decision tree:")
             for i in range(0, len(dtree.feature_importances_)):
                 print(
-                    train_X.columns[ordered_indices[i]],
+                    feature_names[ordered_indices[i]],
                 )
                 print(
                     " & ",
@@ -365,7 +387,7 @@ class ClassificationAlgorithms:
             tree.export_graphviz(
                 dtree,
                 out_file=export_tree_path + export_tree_name,
-                feature_names=train_X.columns,
+                feature_names=feature_names,
                 class_names=dtree.classes_,
             )
 
@@ -376,6 +398,9 @@ class ClassificationAlgorithms:
     # test and training set. It returns the categorical predictions for the training and test set as well as the
     # probabilities associated with each class, each class being represented as a column in the data frame.
     def naive_bayes(self, train_X, train_y, test_X):
+        train_X = as_contiguous_array(train_X)
+        test_X = as_contiguous_array(test_X)
+
         # Create the model
         nb = GaussianNB()
 
@@ -408,6 +433,9 @@ class ClassificationAlgorithms:
         print_model_details=False,
         gridsearch=True,
     ):
+        feature_names = train_X.columns if isinstance(train_X, pd.DataFrame) else None
+        train_X = as_contiguous_array(train_X)
+        test_X = as_contiguous_array(test_X)
 
         if gridsearch:
             tuned_parameters = [
@@ -454,7 +482,7 @@ class ClassificationAlgorithms:
             print("Feature importance random forest:")
             for i in range(0, len(rf.feature_importances_)):
                 print(
-                    train_X.columns[ordered_indices[i]],
+                    feature_names[ordered_indices[i]],
                 )
                 print(
                     " & ",

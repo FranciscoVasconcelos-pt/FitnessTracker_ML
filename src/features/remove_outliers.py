@@ -12,7 +12,7 @@ DATA_INTERIM = Path(__file__).resolve().parents[2] / "data" / "interim"
 # Load data
 # --------------------------------------------------------------
 df = pd.read_pickle(DATA_INTERIM / "01_data_processed.pkl")
-outlier_columns = list(df.columns[:6])
+outlier_columns = ["acc_x", "acc_y", "acc_z", "gyro_x", "gyro_y", "gyro_z"]
 # --------------------------------------------------------------
 # Plotting outliers
 # --------------------------------------------------------------
@@ -20,10 +20,10 @@ plt.style.use("fivethirtyeight")
 plt.rcParams["figure.figsize"] = (20, 5)
 plt.rcParams["figure.dpi"] = 100
 
-df[["acc_y", "label"]].boxplot(by="label", figsize=(20, 10))
+df.boxplot(column="acc_y", by="label", figsize=(20, 10))
 
-df[outlier_columns[:3] + ["label"]].boxplot(by="label", figsize=(20, 10), layout=(1, 3))
-df[outlier_columns[3:] + ["label"]].boxplot(by="label", figsize=(20, 10), layout=(1, 3))
+df.boxplot(column=outlier_columns[:3], by="label", figsize=(20, 10), layout=(1, 3))
+df.boxplot(column=outlier_columns[3:], by="label", figsize=(20, 10), layout=(1, 3))
 
 
 def plot_binary_outliers(dataset, col, outlier_col, reset_index):
@@ -127,10 +127,10 @@ for col in outlier_columns:
 # --------------------------------------------------------------
 
 # Check for normal distribution
-df[outlier_columns[:3] + ["label"]].plot.hist(
+df[outlier_columns[:3]].join(df["label"]).plot.hist(
     by="label", figsize=(20, 10), layout=(3, 3)
 )
-df[outlier_columns[3:] + ["label"]].plot.hist(
+df[outlier_columns[3:]].join(df["label"]).plot.hist(
     by="label", figsize=(20, 10), layout=(3, 3)
 )
 
