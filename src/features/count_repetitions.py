@@ -1,3 +1,7 @@
+import matplotlib
+
+matplotlib.use("Agg")
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -80,21 +84,22 @@ LowPass.low_pass_filter(
 # --------------------------------------------------------------
 # Create function to count repetitions
 # --------------------------------------------------------------
-def count_reps(dataset, cutoff=0.4, order=10, column="acc_r"):
+def count_reps(dataset, cutoff=0.4, order=10, column="acc_r", show_plot=False):
     data = LowPass.low_pass_filter(
         dataset, col=column, sampling_frequency=fs, cutoff_frequency=cutoff, order=order
     )
     indexes = argrelextrema(data[column + "_lowpass"].values, np.greater)
     peaks = data.iloc[indexes]
 
-    fig, ax = plt.subplots()
-    plt.plot(data[f"{column}_lowpass"])
-    plt.plot(peaks[f"{column}_lowpass"], "o", color="red")
-    ax.set_ylabel(f"{column}_lowpass")
-    exercise = dataset["label"].iloc[0].title()
-    category = dataset["category"].iloc[0].title()
-    plt.title(f"{category} {exercise}: {len(peaks)} Reps")
-    plt.show()
+    if show_plot:
+        fig, ax = plt.subplots()
+        plt.plot(data[f"{column}_lowpass"])
+        plt.plot(peaks[f"{column}_lowpass"], "o", color="red")
+        ax.set_ylabel(f"{column}_lowpass")
+        exercise = dataset["label"].iloc[0].title()
+        category = dataset["category"].iloc[0].title()
+        plt.title(f"{category} {exercise}: {len(peaks)} Reps")
+        plt.close(fig)
 
     return len(peaks)
 
@@ -137,4 +142,8 @@ rep_df
 # --------------------------------------------------------------
 
 erro = mean_absolute_error(rep_df["reps"], rep_df["reps_pred"]).round(2)
-rep_df.groupby(["label", "category"])[["reps", "reps_pred"]].mean().plot.bar()
+summary = rep_df.groupby(["label", "category"])[["reps", "reps_pred"]].mean().round(2)
+
+print(f"Mean Absolute Error (reps): {erro}")
+print("\nAverage reps by exercise and category:")
+print(summary.to_string())
