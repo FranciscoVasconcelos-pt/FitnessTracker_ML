@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ML Fitness Tracker — Live Sensors</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>Live Sensor Test</h1>
+        <p class="subtitle">Phase 1 — phone accelerometer and gyroscope</p>
+      </header>
+
+      <section class="card">
+        <p id="status" data-type="info">Tap Start and allow motion access when prompted.</p>
+        <div class="actions">
+          <button id="start-btn" type="button">Start</button>
+          <button id="stop-btn" type="button" disabled>Stop</button>
+        </div>
+      </section>
+
+      <section class="card stats-grid">
+        <div>
+          <span class="label">Sample rate</span>
+          <strong id="sample-rate">0.0 Hz</strong>
+        </div>
+        <div>
+          <span class="label">Buffer size</span>
+          <strong id="sample-count">0</strong>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Accelerometer (m/s²)</h2>
+        <div class="stats-grid three">
+          <div><span class="label">X</span><strong id="acc-x">—</strong></div>
+          <div><span class="label">Y</span><strong id="acc-y">—</strong></div>
+          <div><span class="label">Z</span><strong id="acc-z">—</strong></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Gyroscope (deg/s)</h2>
+        <div class="stats-grid three">
+          <div><span class="label">Alpha</span><strong id="gyro-x">—</strong></div>
+          <div><span class="label">Beta</span><strong id="gyro-y">—</strong></div>
+          <div><span class="label">Gamma</span><strong id="gyro-z">—</strong></div>
+        </div>
+      </section>
+
+      <section class="card chart-card">
+        <h2>Live acceleration</h2>
+        <canvas id="motion-chart" aria-label="Live acceleration chart"></canvas>
+      </section>
+
+      <section class="card tips">
+        <h2>Testing tips</h2>
+        <ul>
+          <li>Use the same WiFi as your PC.</li>
+          <li><strong>iPhone:</strong> open <code>https://&lt;PC-IP&gt;:8000</code> in <strong>Safari</strong> (HTTPS required).</li>
+          <li>Accept the certificate warning, then tap Start and allow motion access.</li>
+          <li>Try arm band vs pocket and compare the signal shape.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

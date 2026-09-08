@@ -68,11 +68,58 @@ MLFitnessTracker/
 │   │   ├── save_model.py         # Treino rápido + guardar modelo
 │   │   ├── predict_model.py      # Inferência com modelo guardado
 │   │   └── LearningAlgorithms.py # Wrapper dos classificadores sklearn
+│   ├── app/
+│   │   └── serve_web.py          # Servidor HTTPS para live tracker (Fase 1)
 │   └── visualization/
 │       └── plot_settings.py
+├── web/                          # Frontend live tracker (HTML/JS/CSS)
+├── docs/
+│   ├── LIVE_TRACKER.md           # Como usar o live tracker
+│   └── LIVE_TRACKER_TODO.md      # Roadmap de implementação
 ├── environment.yml
 └── README.md
 ```
+
+---
+
+## Escolha de tecnologias
+
+### Pipeline ML (offline)
+
+| Tecnologia | Papel | Porquê |
+|---|---|---|
+| **Python 3.8** | Linguagem base | Versão original do projeto; compatível com scikit-learn e o resto do stack |
+| **pandas / NumPy** | Manipulação de dados | Padrão em data science; leitura de CSV, merge temporal, janelas deslizantes |
+| **SciPy** | Processamento de sinal | Filtros Butterworth, deteção de picos (`argrelextrema`) para contagem de reps |
+| **scikit-learn** | Modelação | Random Forest como classificador principal — robusto, interpretável, bom desempenho em features tabulares |
+| **Matplotlib / Seaborn** | Visualização | Exploração de dados, outliers, matrizes de confusão |
+| **Conda** | Ambiente | Reprodutibilidade via `environment.yml`; gestão simples de dependências científicas |
+| **pickle (`.pkl`)** | Persistência | Guardar datasets intermédios e o modelo treinado sem dependências extra |
+
+O pipeline segue o livro *Machine Learning for the Quantified Self* (Hoogendoorn & Funk): abstrações temporais, FFT, PCA e classificação sobre dados de sensores IMU.
+
+### Live tracker (tempo real — Opção B)
+
+Sem hardware MetaMotion, o tracker em tempo real usa **telemóvel + browser + backend local no PC**:
+
+| Tecnologia | Papel | Porquê |
+|---|---|---|
+| **HTML / CSS / JavaScript (vanilla)** | Frontend mobile | Sem build tools nem app nativa; abre no browser do telemóvel; fácil de iterar |
+| **`DeviceMotionEvent` API** | Sensores no browser | Acede ao acelerómetro e giroscópio do telemóvel sem App Store / Google Play |
+| **Canvas API** | Gráfico live | Desenho leve de acc_x/y/z no ecrã, sem bibliotecas externas |
+| **FastAPI** | Backend Python | API REST moderna; na Fase 2+ recebe buffers de sensores e corre inferência ML |
+| **Uvicorn** | Servidor ASGI | Servir a página web e endpoints com baixa latência |
+| **HTTPS (certificado auto-assinado)** | Ligação segura | **Obrigatório no iPhone/Safari** — a Apple só expõe sensores de movimento em contexto seguro (`https://` ou `localhost`) |
+| **OpenSSL** | Certificados locais | Gera `certs/key.pem` e `certs/cert.pem` automaticamente ao arrancar o servidor |
+
+**Porquê esta arquitetura?**
+
+- **Sem MetaMotion:** o telemóvel substitui o sensor wearable; qualquer pessoa pode testar em casa.
+- **Sem app nativa:** evita Swift/Kotlin, publicação em lojas e permissões complexas — o browser já tem acesso aos sensores (com HTTPS no iOS).
+- **Backend no PC (mesma WiFi):** para desenvolvimento não é preciso hosting cloud; na Fase 6 migra-se para Render/Railway mudando só o `API_URL`.
+- **FastAPI + Python:** reutiliza o mesmo ecossistema do pipeline ML (pandas, sklearn, scipy) para inferência live nas fases seguintes.
+
+> Guia de instalação e uso do live tracker: **[docs/LIVE_TRACKER.md](docs/LIVE_TRACKER.md)**
 
 ---
 
