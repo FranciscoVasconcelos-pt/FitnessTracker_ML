@@ -1,7 +1,9 @@
 // Config
 const MAX_SAMPLES = 120;       // chart window (last N points)
 const CHART_PADDING = 24;
-const SEND_INTERVAL_MS = 1500; // how often we POST to the PC; will decrease for better accuracy in the future
+const SEND_INTERVAL_MS = 250;  // max gap between POST /predict (live feel)
+const MIN_SEND_INTERVAL_MS = 200;
+const SEND_BATCH_SIZE = 10;    // also send when this many samples are queued
 
 // Empty = same server as the page. Set a full URL when we deploy to the cloud.
 const API_URL = "";
@@ -19,6 +21,11 @@ const state = {
   estimatedHz: 0,
   packetsSent: 0,
   lastBackendStatus: null,
+  lastPrediction: null,
+  lastSendAt: 0,
+  predictRequestSeq: 0,
+  lastAppliedSeq: 0,
+  predictInFlight: false,
 };
 
 const elements = {
@@ -36,6 +43,9 @@ const elements = {
   packetsSent: document.getElementById("packets-sent"),
   backendTotal: document.getElementById("backend-total"),
   backendStatus: document.getElementById("backend-status"),
+  predictExercise: document.getElementById("predict-exercise"),
+  predictConfidence: document.getElementById("predict-confidence"),
+  predictStatus: document.getElementById("predict-status"),
   recordLabel: document.getElementById("record-label"),
   recordCategory: document.getElementById("record-category"),
   recordParticipant: document.getElementById("record-participant"),
@@ -61,6 +71,35 @@ function updateBackendUI(data) {
   elements.backendTotal.textContent = String(data?.total_samples ?? "—");
   elements.backendStatus.textContent = data?.status ?? "—";
   elements.backendStatus.dataset.type = data?.status === "ok" ? "success" : "error";
+}
+
+function updatePredictionUI(data) {
+  if (!data) {
+    elements.predictExercise.textContent = "—";
+    elements.predictConfidence.textContent = "—";
+    elements.predictStatus.textContent = "Waiting for data…";
+    elements.predictStatus.dataset.type = "info";
+    return;
+  }
+
+  if (data.status === "warming_up") {
+    elements.predictExercise.textContent = "…";
+    elements.predictConfidence.textContent = "—";
+    const progress =
+      data.warmup_progress != null ? ` (${data.warmup_progress}%)` : "";
+    elements.predictStatus.textContent =
+      (data.message || "Collecting sensor data…") + progress;
+    elements.predictStatus.dataset.type = "info";
+    return;
+  }
+
+  if (data.status === "ok") {
+    elements.predictExercise.textContent = data.exercise_name || data.exercise || "—";
+    elements.predictConfidence.textContent =
+      data.confidence != null ? `${Math.round(data.confidence * 100)}%` : "—";
+    elements.predictStatus.textContent = "Live prediction";
+    elements.predictStatus.dataset.type = "success";
+  }
 }
 
 function resizeCanvas() {
@@ -125,6 +164,23 @@ function storeReading(event) {
     state.recordBuffer.push(reading);
     elements.recordCount.textContent = `${state.recordBuffer.length} samples`;
   }
+
+  maybeSendPredict();
+}
+
+function maybeSendPredict() {
+  if (!state.active || state.sendBuffer.length === 0) {
+    return;
+  }
+
+  const now = Date.now();
+  const elapsed = now - state.lastSendAt;
+  if (elapsed < MIN_SEND_INTERVAL_MS) {
+    return;
+  }
+  if (state.sendBuffer.length >= SEND_BATCH_SIZE || elapsed >= SEND_INTERVAL_MS) {
+    flushSendBuffer();
+  }
 }
 
 // Feed the on-screen chart only — runs at full sensor rate (~30–60 Hz).
@@ -149,33 +205,53 @@ function pushSample(event) {
   drawChart();
 }
 
-// Drain sendBuffer and ship it to FastAPI. Called on a timer and once on Stop.
+// One predict in flight at a time; apply responses in order (ignore stale ones).
 async function flushSendBuffer() {
-  if (state.sendBuffer.length === 0) {
+  if (state.sendBuffer.length === 0 || state.predictInFlight) {
     return;
   }
 
   const readings = state.sendBuffer.splice(0);
+  state.lastSendAt = Date.now();
+  state.predictInFlight = true;
+  const seq = ++state.predictRequestSeq;
 
   try {
-    const response = await fetch(`${apiBase()}/sensor`, {
+    const response = await fetch(`${apiBase()}/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ readings }),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.detail || `HTTP ${response.status}`);
     }
 
     const data = await response.json();
+    if (seq <= state.lastAppliedSeq) {
+      return;
+    }
+
+    state.lastAppliedSeq = seq;
     state.packetsSent += 1;
     state.lastBackendStatus = data;
+    state.lastPrediction = data;
     updateBackendUI(data);
+    updatePredictionUI(data);
   } catch (error) {
-    elements.backendStatus.textContent = "error";
-    elements.backendStatus.dataset.type = "error";
-    setStatus(`Backend error: ${error.message}`, "error");
+    if (seq > state.lastAppliedSeq) {
+      elements.backendStatus.textContent = "error";
+      elements.backendStatus.dataset.type = "error";
+      elements.predictStatus.textContent = "Backend error";
+      elements.predictStatus.dataset.type = "error";
+      setStatus(`Backend error: ${error.message}`, "error");
+    }
+  } finally {
+    state.predictInFlight = false;
+    if (state.active && state.sendBuffer.length > 0) {
+      flushSendBuffer();
+    }
   }
 }
 
@@ -319,15 +395,23 @@ async function startTracking() {
   state.estimatedHz = 0;
   state.packetsSent = 0;
   state.lastBackendStatus = null;
+  state.lastPrediction = null;
+  state.lastSendAt = 0;
+  state.predictRequestSeq = 0;
+  state.lastAppliedSeq = 0;
+  state.predictInFlight = false;
 
   window.addEventListener("devicemotion", onDeviceMotion);
   startSendLoop();
   elements.startBtn.disabled = true;
   elements.stopBtn.disabled = false;
   elements.recordStartBtn.disabled = false;
-  setStatus("Tracking active. Sending sensor data to PC every ~1.5 s.", "success");
+  setStatus("Tracking active. Live predictions ~4×/s after warm-up.", "success");
   drawChart();
   updateBackendUI(null);
+  updatePredictionUI(null);
+
+  fetch(`${apiBase()}/predict/reset`, { method: "POST" }).catch(() => {});
 }
 
 async function stopTracking() {

@@ -10,7 +10,7 @@
     <main class="container">
       <header>
         <h1>Live Sensor Test</h1>
-        <p class="subtitle">Record phone data → retrain exercise_classifier.pkl</p>
+        <p class="subtitle">Live exercise detection + record sets for retraining</p>
       </header>
 
       <section class="card">
@@ -38,6 +38,15 @@
           <span class="label">PC total samples</span>
           <strong id="backend-total">—</strong>
         </div>
+      </section>
+
+      <section class="card prediction-card">
+        <h2>Live prediction</h2>
+        <div class="prediction-display">
+          <strong id="predict-exercise">—</strong>
+          <span id="predict-confidence" class="confidence">—</span>
+        </div>
+        <p id="predict-status" class="hint" data-type="info">Waiting for data…</p>
       </section>
 
       <section class="card">

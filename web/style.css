@@ -39,13 +39,36 @@ header h1 {
 }
 
 #status[data-type="success"],
-#backend-status[data-type="success"] {
+#backend-status[data-type="success"],
+#predict-status[data-type="success"] {
   color: #4ade80;
 }
 
 #status[data-type="error"],
-#backend-status[data-type="error"] {
+#backend-status[data-type="error"],
+#predict-status[data-type="error"] {
   color: #f87171;
+}
+
+.prediction-card {
+  border-color: #2563eb;
+}
+
+.prediction-display {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#predict-exercise {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.confidence {
+  color: #94a3b8;
+  font-size: 1rem;
 }
 
 .actions {

@@ -87,6 +87,20 @@ def main():
         artifact["test_sets"] = test_sets
 
     joblib.dump(artifact, model_path)
+
+    import sys
+
+    sys.path.insert(0, str(ROOT / "src" / "app"))
+    from live_features import fit_live_artifact
+
+    live_artifact = fit_live_artifact(
+        DATA_INTERIM / "02_outliers_removed_chauvenet.pkl",
+        DATA_INTERIM / "03_data_features.pkl",
+    )
+    live_path = MODELS_DIR / "live_artifact.pkl"
+    joblib.dump(live_artifact, live_path)
+    print(f"Live artifact guardado em {live_path}")
+
     if test_sets:
         print(
             f"Modelo guardado em {model_path} "

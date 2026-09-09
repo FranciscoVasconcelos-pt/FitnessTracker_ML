@@ -1,12 +1,14 @@
 """FastAPI backend for the live fitness tracker.
 
-Serves the web UI over HTTPS, receives sensor batches, and saves phone
-recordings so we can retrain exercise_classifier.pkl on iPhone data.
+Serves the web UI over HTTPS, receives sensor batches, runs live ML
+predictions, and saves phone recordings for retraining.
 """
 
 import os
 import socket
 import subprocess
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -18,6 +20,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+APP_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(APP_DIR))
+from predict_live import LivePredictor  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 PHONE_RAW = ROOT / "data" / "raw" / "phone"
@@ -28,6 +34,15 @@ CERT_FILE = CERT_DIR / "cert.pem"
 # Running totals for /health and /sensor responses (in-memory for now).
 total_samples_received = 0
 total_packets_received = 0
+live_predictor: Optional[LivePredictor] = None
+
+# Terminal log throttling — avoid flooding on every /predict packet.
+_log_state = {
+    "exercise": None,
+    "last_log_at": 0.0,
+    "warmup_milestone": -1,
+}
+LOG_HEARTBEAT_SEC = 8.0
 
 app = FastAPI(title="ML Fitness Tracker Live")
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
@@ -70,6 +85,21 @@ class RecordResponse(BaseModel):
     path: str
 
 
+class PredictResponse(BaseModel):
+    status: str
+    exercise: Optional[str] = None
+    exercise_name: Optional[str] = None
+    confidence: Optional[float] = None
+    message: Optional[str] = None
+    warmup_progress: Optional[int] = None
+    buffer_span_ms: Optional[int] = None
+    samples: Optional[int] = None
+    buffer_samples: Optional[int] = None
+    resampled_rows: Optional[int] = None
+    total_samples: int
+    total_packets: int
+
+
 # Static files — the phone loads these once, then runs JS locally.
 @app.get("/")
 def index():
@@ -86,12 +116,54 @@ def style_css():
     return FileResponse(WEB_DIR / "style.css")
 
 
+def get_live_predictor():
+    global live_predictor
+    if live_predictor is None:
+        live_predictor = LivePredictor()
+    return live_predictor
+
+
+def reset_log_state():
+    global _log_state
+    _log_state = {"exercise": None, "last_log_at": 0.0, "warmup_milestone": -1}
+
+
+def log_prediction(result):
+    """Print only on exercise change, warmup milestones, or occasional heartbeat."""
+    global _log_state
+    now = time.monotonic()
+
+    if result["status"] == "warming_up":
+        progress = result.get("warmup_progress") or 0
+        milestone = max(m for m in (0, 25, 50, 75, 100) if progress >= m)
+        if milestone > _log_state["warmup_milestone"]:
+            print(f"[live] A aquecer… {progress}%")
+            _log_state["warmup_milestone"] = milestone
+        return
+
+    exercise = result.get("exercise_name") or result.get("exercise", "?")
+    confidence = result.get("confidence") or 0.0
+    changed = exercise != _log_state["exercise"]
+    heartbeat = now - _log_state["last_log_at"] >= LOG_HEARTBEAT_SEC
+
+    if changed:
+        print(f"[live] >> {exercise} ({confidence:.0%})")
+        _log_state["exercise"] = exercise
+        _log_state["last_log_at"] = now
+        _log_state["warmup_milestone"] = -1
+    elif heartbeat:
+        print(f"[live]    {exercise} ({confidence:.0%})")
+        _log_state["last_log_at"] = now
+
+
 @app.get("/health")
 def health():
+    predictor_ready = (ROOT / "models" / "live_artifact.pkl").exists()
     return {
         "status": "ok",
         "total_samples": total_samples_received,
         "total_packets": total_packets_received,
+        "predictor_ready": predictor_ready,
     }
 
 
@@ -120,6 +192,43 @@ def receive_sensor(payload: SensorPayload):
         total_samples=total_samples_received,
         total_packets=total_packets_received,
     )
+
+
+@app.post("/predict", response_model=PredictResponse)
+def predict_exercise(payload: SensorPayload):
+    global total_samples_received, total_packets_received
+
+    count = len(payload.readings)
+    total_samples_received += count
+    total_packets_received += 1
+
+    try:
+        predictor = get_live_predictor()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Predictor not ready: {exc}. Run save_model.py first.",
+        ) from exc
+
+    predictor.add_readings(payload.readings)
+    result = predictor.predict()
+    log_prediction(result)
+
+    return PredictResponse(
+        **result,
+        total_samples=total_samples_received,
+        total_packets=total_packets_received,
+    )
+
+
+@app.post("/predict/reset")
+def reset_predictor():
+    global live_predictor
+    if live_predictor is not None:
+        live_predictor.clear()
+    reset_log_state()
+    print("[live] Sessão reiniciada — à espera de predição.")
+    return {"status": "ok"}
 
 
 # Save a full training set from the phone (one exercise = one CSV).
@@ -235,7 +344,7 @@ def main():
     print("HTTPS is required for iPhone motion sensors.")
     print(f"Open on this PC:  https://127.0.0.1:{port}")
     print(f"Open on iPhone:   https://{ip}:{port}  (use Safari on ios)")
-    print("Phone → POST /sensor (live) and POST /record (training sets).")
+    print("Phone → POST /predict (live ML), POST /sensor, POST /record (training).")
     print(f"Recordings saved to: {PHONE_RAW}")
     print("On iPhone: accept the certificate warning, then tap Start.")
     print("Press Ctrl+C to stop.")
@@ -245,6 +354,7 @@ def main():
         port=port,
         ssl_keyfile=str(KEY_FILE),
         ssl_certfile=str(CERT_FILE),
+        access_log=False,
     )
 
 
