@@ -4,6 +4,7 @@ const CHART_PADDING = 24;
 const SEND_INTERVAL_MS = 250;  // max gap between POST /predict (live feel)
 const MIN_SEND_INTERVAL_MS = 200;
 const SEND_BATCH_SIZE = 10;    // also send when this many samples are queued
+const VOTE_REQUIRED = 3;       // consecutive matching predictions before UI updates
 
 // Empty = same server as the page. Set a full URL when we deploy to the cloud.
 const API_URL = "";
@@ -26,6 +27,9 @@ const state = {
   predictRequestSeq: 0,
   lastAppliedSeq: 0,
   predictInFlight: false,
+  voteBuffer: [],
+  displayedExercise: null,
+  displayedConfidence: null,
 };
 
 const elements = {
@@ -73,8 +77,51 @@ function updateBackendUI(data) {
   elements.backendStatus.dataset.type = data?.status === "ok" ? "success" : "error";
 }
 
+function resetVoteState() {
+  state.voteBuffer = [];
+  state.displayedExercise = null;
+  state.displayedConfidence = null;
+}
+
+function streakFromEnd(label) {
+  let streak = 0;
+  for (let i = state.voteBuffer.length - 1; i >= 0; i -= 1) {
+    if (state.voteBuffer[i].label !== label) {
+      break;
+    }
+    streak += 1;
+  }
+  return streak;
+}
+
+function recordVote(data) {
+  const label = data.exercise;
+  const name = data.exercise_name || label;
+  state.voteBuffer.push({
+    label,
+    name,
+    confidence: data.confidence ?? 0,
+  });
+  if (state.voteBuffer.length > VOTE_REQUIRED * 2) {
+    state.voteBuffer.shift();
+  }
+
+  const streak = streakFromEnd(label);
+  const confirmed = streak >= VOTE_REQUIRED;
+  if (confirmed) {
+    const recent = state.voteBuffer.slice(-VOTE_REQUIRED);
+    const avgConfidence =
+      recent.reduce((sum, vote) => sum + vote.confidence, 0) / recent.length;
+    state.displayedExercise = name;
+    state.displayedConfidence = avgConfidence;
+  }
+
+  return { label, name, streak, confirmed };
+}
+
 function updatePredictionUI(data) {
   if (!data) {
+    resetVoteState();
     elements.predictExercise.textContent = "—";
     elements.predictConfidence.textContent = "—";
     elements.predictStatus.textContent = "Waiting for data…";
@@ -94,11 +141,32 @@ function updatePredictionUI(data) {
   }
 
   if (data.status === "ok") {
-    elements.predictExercise.textContent = data.exercise_name || data.exercise || "—";
-    elements.predictConfidence.textContent =
-      data.confidence != null ? `${Math.round(data.confidence * 100)}%` : "—";
-    elements.predictStatus.textContent = "Live prediction";
-    elements.predictStatus.dataset.type = "success";
+    const vote = recordVote(data);
+
+    if (state.displayedExercise) {
+      elements.predictExercise.textContent = state.displayedExercise;
+      elements.predictConfidence.textContent =
+        state.displayedConfidence != null
+          ? `${Math.round(state.displayedConfidence * 100)}%`
+          : "—";
+    } else {
+      elements.predictExercise.textContent = vote.streak > 0 ? vote.name : "…";
+      elements.predictConfidence.textContent =
+        data.confidence != null ? `${Math.round(data.confidence * 100)}%` : "—";
+    }
+
+    const pendingChange =
+      vote.streak > 0 &&
+      vote.streak < VOTE_REQUIRED &&
+      (!state.displayedExercise || vote.name !== state.displayedExercise);
+
+    if (pendingChange) {
+      elements.predictStatus.textContent = `A confirmar ${vote.name} (${vote.streak}/${VOTE_REQUIRED})…`;
+      elements.predictStatus.dataset.type = "info";
+    } else {
+      elements.predictStatus.textContent = "Live prediction";
+      elements.predictStatus.dataset.type = "success";
+    }
   }
 }
 
@@ -400,6 +468,7 @@ async function startTracking() {
   state.predictRequestSeq = 0;
   state.lastAppliedSeq = 0;
   state.predictInFlight = false;
+  resetVoteState();
 
   window.addEventListener("devicemotion", onDeviceMotion);
   startSendLoop();
