@@ -118,3 +118,41 @@ strong {
 .tips li + li {
   margin-top: 8px;
 }
+
+.hint {
+  margin: 0 0 12px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.form-grid label {
+  display: block;
+}
+
+.form-grid select,
+.form-grid input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-size: 1rem;
+}
+
+#record-start-btn {
+  background: #059669;
+  color: white;
+}
+
+#record-save-btn {
+  background: #7c3aed;
+  color: white;
+}

@@ -2,9 +2,21 @@
 
 Tracker em tempo real com **sensores do telemóvel** + **página web** + **backend Python no PC** (mesma WiFi).
 
-**Estado atual:** Fase 2 — gráfico live + envio de buffers ao PC via `POST /sensor` (sem ML ainda).
+**Estado atual:** gravar sets no telemóvel para re-treinar o mesmo `exercise_classifier.pkl`.
 
 Roadmap completo: [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md)
+
+---
+
+## O que é a “Opção C”?
+
+Ao planear o ML live, considerámos três abordagens (detalhe em [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md#opções-para-ml-no-telemóvel-a-b-c)):
+
+- **Opção A** — usar o modelo MetaMotion actual no telemóvel sem re-treinar (pipeline pesado no PC; pouco fiável no iPhone).
+- **Opção B** — criar um modelo simples novo só para live (rápido, mas o teu modelo actual ficaria à margem).
+- **Opção C** ✅ — **gravar exercícios com o telemóvel**, correr o **mesmo pipeline** que já tens (`remove_outliers` → `build_features` → `save_model.py`) e **substituir** `exercise_classifier.pkl` por uma versão treinada com os teus dados.
+
+Em resumo: **não jogamos fora o modelo anterior** — usamo-lo como referência offline e re-treinamos a mesma arquitectura (Random Forest + features completas) com gravações do iPhone. Por isso o site tem “Record set” / “Save to PC” e o script `make_dataset_phone.py`.
 
 ---
 
@@ -151,6 +163,47 @@ const API_URL = "https://your-app.onrender.com";
 
 ---
 
+## Gravar e re-treinar (Opção C)
+
+O modelo MetaMotion (~99%) mantém-se para offline/baseline (`predict_model.py`). Para o telemóvel, gravamos **os teus** dados e re-treinamos o **mesmo** pipeline — ver secção [O que é a Opção C?](#o-que-é-a-opção-c) acima.
+
+### Gravar um set no iPhone
+
+1. **Start** (tracking activo)
+2. Escolhe exercício + categoria (heavy / medium)
+3. **Record set** — faz o exercício (5 ou 10 reps)
+4. **Save to PC** — CSV guardado em `data/raw/phone/`
+
+No terminal do PC:
+
+```
+POST /record: saved 312 samples → user-squat-heavy-20260909_154500.csv
+```
+
+### Processar e re-treinar (PC)
+
+```bash
+conda activate tracking-barbell-exercises
+cd MLFitnessTracker
+
+# 1. Ingestão phone → pkl @ 5 Hz
+python src/data/make_dataset_phone.py
+
+# 2. Copiar para o nome que o pipeline espera (ou editar os scripts)
+copy data\interim\01_data_processed_phone.pkl data\interim\01_data_processed.pkl
+
+# 3. Pipeline normal
+python src/features/remove_outliers.py
+python src/features/build_features.py
+python src/models/save_model.py
+```
+
+O `exercise_classifier.pkl` fica re-treinado com dados do telemóvel. Depois ligamos `/predict` live (próximo passo).
+
+**Meta de gravação:** 5–10 sets por exercício, **sempre a mesma posição** do telemóvel.
+
+---
+
 ## Parar o servidor
 
 No terminal onde o servidor está a correr:
@@ -229,14 +282,13 @@ A pasta `certs/` está no `.gitignore`. **Não commits** `key.pem` nem `cert.pem
 
 ---
 
-## Próximas fases
+## Próximos passos (Opção C)
 
-| Fase | Objetivo |
+| Passo | Objetivo |
 |---|---|
-| **2** | Telemóvel envia buffers ao PC via `POST /sensor` |
-| **3** | Modelo ML simplificado + previsão live de exercício |
-| **4** | Gravar dados teus e re-treinar com telemóvel |
-| **5** | Contagem de reps em tempo real |
-| **6** | Deploy cloud (Render/Railway) para usar no ginásio |
+| **Gravar sets** | 5–10 por exercício via Record set / Save to PC |
+| **Pipeline + save_model** | Re-treinar `exercise_classifier.pkl` |
+| **/predict live** | Mostrar exercício previsto no telemóvel |
+| **Reps + hosting** | Fases finais |
 
-Ver detalhes em [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md).
+Ver [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md).

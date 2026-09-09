@@ -12,6 +12,8 @@ const state = {
   samples: [],
   sampleTimes: [],
   sendBuffer: [],
+  recordBuffer: [],
+  recording: false,
   sendTimer: null,
   lastSampleMs: null,
   estimatedHz: 0,
@@ -34,6 +36,12 @@ const elements = {
   packetsSent: document.getElementById("packets-sent"),
   backendTotal: document.getElementById("backend-total"),
   backendStatus: document.getElementById("backend-status"),
+  recordLabel: document.getElementById("record-label"),
+  recordCategory: document.getElementById("record-category"),
+  recordParticipant: document.getElementById("record-participant"),
+  recordStartBtn: document.getElementById("record-start-btn"),
+  recordSaveBtn: document.getElementById("record-save-btn"),
+  recordCount: document.getElementById("record-count"),
   canvas: document.getElementById("motion-chart"),
 };
 
@@ -101,7 +109,7 @@ function storeReading(event) {
     return;
   }
 
-  state.sendBuffer.push({
+  const reading = {
     t: Date.now(),
     acc_x: acc.x,
     acc_y: acc.y,
@@ -109,7 +117,14 @@ function storeReading(event) {
     gyro_x: gyro?.alpha ?? null,
     gyro_y: gyro?.beta ?? null,
     gyro_z: gyro?.gamma ?? null,
-  });
+  };
+
+  state.sendBuffer.push(reading);
+
+  if (state.recording) {
+    state.recordBuffer.push(reading);
+    elements.recordCount.textContent = `${state.recordBuffer.length} samples`;
+  }
 }
 
 // Feed the on-screen chart only — runs at full sensor rate (~30–60 Hz).
@@ -309,23 +324,83 @@ async function startTracking() {
   startSendLoop();
   elements.startBtn.disabled = true;
   elements.stopBtn.disabled = false;
+  elements.recordStartBtn.disabled = false;
   setStatus("Tracking active. Sending sensor data to PC every ~1.5 s.", "success");
   drawChart();
   updateBackendUI(null);
 }
 
 async function stopTracking() {
+  if (state.recording) {
+    setStatus("Stop recording or save the set before stopping tracking.", "error");
+    return;
+  }
+
   state.active = false;
   window.removeEventListener("devicemotion", onDeviceMotion);
   stopSendLoop();
   await flushSendBuffer();
   elements.startBtn.disabled = false;
   elements.stopBtn.disabled = true;
+  elements.recordStartBtn.disabled = true;
   setStatus("Tracking stopped.", "info");
+}
+
+function startRecording() {
+  if (!state.active) {
+    setStatus("Start tracking first, then record a set.", "error");
+    return;
+  }
+
+  state.recording = true;
+  state.recordBuffer = [];
+  elements.recordStartBtn.disabled = true;
+  elements.recordSaveBtn.disabled = false;
+  elements.recordCount.textContent = "0 samples";
+  setStatus(`Recording ${elements.recordLabel.value}… do the set, then Save.`, "success");
+}
+
+async function saveRecording() {
+  if (!state.recording || state.recordBuffer.length === 0) {
+    setStatus("Nothing to save — record a set first.", "error");
+    return;
+  }
+
+  const payload = {
+    participant: elements.recordParticipant.value.trim() || "user",
+    label: elements.recordLabel.value,
+    category: elements.recordCategory.value,
+    readings: state.recordBuffer,
+  };
+
+  try {
+    const response = await fetch(`${apiBase()}/record`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.detail || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    state.recording = false;
+    state.recordBuffer = [];
+    elements.recordStartBtn.disabled = false;
+    elements.recordSaveBtn.disabled = true;
+    elements.recordCount.textContent = "0 samples";
+    setStatus(`Saved ${data.samples} samples → ${data.filename}`, "success");
+  } catch (error) {
+    setStatus(`Save failed: ${error.message}`, "error");
+  }
 }
 
 elements.startBtn.addEventListener("click", startTracking);
 elements.stopBtn.addEventListener("click", stopTracking);
+elements.recordStartBtn.addEventListener("click", startRecording);
+elements.recordSaveBtn.addEventListener("click", saveRecording);
 window.addEventListener("resize", resizeCanvas);
 
 resizeCanvas();

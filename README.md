@@ -120,7 +120,8 @@ Sem hardware MetaMotion, o tracker em tempo real usa **telemóvel + browser + ba
 - **Backend no PC (mesma WiFi):** para desenvolvimento não é preciso hosting cloud; na Fase 6 migra-se para Render/Railway mudando só o `API_URL`.
 - **FastAPI + Python:** reutiliza o mesmo ecossistema do pipeline ML (pandas, sklearn, scipy) para inferência live nas fases seguintes.
 
-> Guia de instalação e uso do live tracker: **[docs/LIVE_TRACKER.md](docs/LIVE_TRACKER.md)**
+> Guia de instalação e uso: **[docs/LIVE_TRACKER.md](docs/LIVE_TRACKER.md)**  
+> Estratégia ML no telemóvel (**Opção C** — gravar dados e re-treinar o mesmo modelo): **[docs/LIVE_TRACKER_TODO.md](docs/LIVE_TRACKER_TODO.md#opções-para-ml-no-telemóvel-a-b-c)**
 
 ---
 

@@ -10,7 +10,7 @@
     <main class="container">
       <header>
         <h1>Live Sensor Test</h1>
-        <p class="subtitle">Phase 2 — live sensors + send to PC</p>
+        <p class="subtitle">Record phone data → retrain exercise_classifier.pkl</p>
       </header>
 
       <section class="card">
@@ -73,13 +73,48 @@
         <canvas id="motion-chart" aria-label="Live acceleration chart"></canvas>
       </section>
 
+      <section class="card">
+        <h2>Record training set</h2>
+        <p class="hint">Start tracking, pick exercise, record one set, save to PC.</p>
+        <div class="form-grid">
+          <label>
+            <span class="label">Exercise</span>
+            <select id="record-label">
+              <option value="bench">Bench</option>
+              <option value="squat">Squat</option>
+              <option value="row">Row</option>
+              <option value="ohp">Overhead press</option>
+              <option value="dead">Deadlift</option>
+              <option value="rest">Rest</option>
+            </select>
+          </label>
+          <label>
+            <span class="label">Category</span>
+            <select id="record-category">
+              <option value="heavy">Heavy (5 reps)</option>
+              <option value="medium">Medium (10 reps)</option>
+            </select>
+          </label>
+          <label>
+            <span class="label">Participant</span>
+            <input id="record-participant" type="text" value="user" autocomplete="off" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="record-start-btn" type="button" disabled>Record set</button>
+          <button id="record-save-btn" type="button" disabled>Save to PC</button>
+        </div>
+        <p class="hint">Buffered: <strong id="record-count">0 samples</strong></p>
+      </section>
+
       <section class="card tips">
         <h2>Testing tips</h2>
         <ul>
           <li>Use the same WiFi as your PC.</li>
           <li><strong>iPhone:</strong> open <code>https://&lt;PC-IP&gt;:8000</code> in <strong>Safari</strong> (HTTPS required).</li>
           <li>Accept the certificate warning, then tap Start and allow motion access.</li>
-          <li>Try arm band vs pocket and compare the signal shape.</li>
+          <li>Record 5–10 sets per exercise, same phone position each time.</li>
+          <li>After recording: run <code>make_dataset_phone.py</code> on the PC.</li>
         </ul>
       </section>
     </main>
