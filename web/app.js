@@ -1,10 +1,12 @@
-const MAX_SAMPLES = 120;
+// Config
+const MAX_SAMPLES = 120;       // chart window (last N points)
 const CHART_PADDING = 24;
-const SEND_INTERVAL_MS = 1500;
+const SEND_INTERVAL_MS = 1500; // how often we POST to the PC; will decrease for better accuracy in the future
 
-// Empty string = same origin (local dev). For cloud hosting: "https://your-app.onrender.com"
+// Empty = same server as the page. Set a full URL when we deploy to the cloud.
 const API_URL = "";
 
+// --- State ---
 const state = {
   active: false,
   samples: [],
@@ -91,6 +93,7 @@ function updateSampleRate(now) {
   elements.sampleRate.textContent = `${state.estimatedHz.toFixed(1)} Hz`;
 }
 
+// Accumulate readings for the next POST /sensor (separate from the chart buffer).
 function storeReading(event) {
   const acc = event.accelerationIncludingGravity;
   const gyro = event.rotationRate;
@@ -109,6 +112,7 @@ function storeReading(event) {
   });
 }
 
+// Feed the on-screen chart only — runs at full sensor rate (~30–60 Hz).
 function pushSample(event) {
   const acc = event.accelerationIncludingGravity;
   if (!acc || acc.x == null) {
@@ -130,6 +134,7 @@ function pushSample(event) {
   drawChart();
 }
 
+// Drain sendBuffer and ship it to FastAPI. Called on a timer and once on Stop.
 async function flushSendBuffer() {
   if (state.sendBuffer.length === 0) {
     return;
@@ -233,6 +238,7 @@ function drawChart() {
   ctx.fillText("●", width + 5, 20);
 }
 
+// Fired by iOS/Android whenever the IMU has a new sample.
 function onDeviceMotion(event) {
   if (!state.active) {
     return;
@@ -242,6 +248,7 @@ function onDeviceMotion(event) {
   pushSample(event);
 }
 
+// iOS needs HTTPS + Safari; Chrome on iPhone won't give us DeviceMotion.
 function getMotionSupportError() {
   if (!window.isSecureContext) {
     return (
@@ -257,6 +264,7 @@ function getMotionSupportError() {
   return null;
 }
 
+// Must run from a user  iOS — called inside startTracking().
 async function requestMotionPermission() {
   if (typeof DeviceMotionEvent?.requestPermission === "function") {
     const response = await DeviceMotionEvent.requestPermission();
@@ -273,6 +281,7 @@ async function requestMotionPermission() {
   }
 }
 
+// Start: ask permission, listen to devicemotion, begin periodic uploads.
 async function startTracking() {
   const supportError = getMotionSupportError();
   if (supportError) {

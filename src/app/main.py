@@ -1,4 +1,8 @@
-"""FastAPI backend for the live fitness tracker (Phase 2+)."""
+"""FastAPI backend for the live fitness tracker.
+
+Serves the web UI over HTTPS and receives sensor batches from the phone.
+Phase 3 will add /predict here once we plug in the ML model.
+"""
 
 import os
 import socket
@@ -18,6 +22,7 @@ CERT_DIR = ROOT / "certs"
 KEY_FILE = CERT_DIR / "key.pem"
 CERT_FILE = CERT_DIR / "cert.pem"
 
+# Running totals for /health and /sensor responses (in-memory for now).
 total_samples_received = 0
 total_packets_received = 0
 
@@ -25,6 +30,8 @@ app = FastAPI(title="ML Fitness Tracker Live")
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
+# Shape of the JSON the phone sends every ~1.5 s.
+# Pydantic rejects bad payloads before our handler runs.
 class Reading(BaseModel):
     t: float = Field(..., description="Unix timestamp in milliseconds")
     acc_x: float
@@ -46,6 +53,7 @@ class SensorResponse(BaseModel):
     total_packets: int
 
 
+# Static files — the phone loads these once, then runs JS locally.
 @app.get("/")
 def index():
     return FileResponse(WEB_DIR / "index.html")
@@ -70,6 +78,8 @@ def health():
     }
 
 
+# Main data path: phone POSTs a batch of acc/gyro readings collected since last send.
+# We don't persist yet — just count and echo back so the UI can confirm delivery.
 @app.post("/sensor", response_model=SensorResponse)
 def receive_sensor(payload: SensorPayload):
     global total_samples_received, total_packets_received
@@ -96,6 +106,7 @@ def receive_sensor(payload: SensorPayload):
 
 
 def local_ip():
+    # Trick to get the LAN IP without caring which interface WiFi uses.
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.connect(("8.8.8.8", 80))
@@ -105,7 +116,8 @@ def local_ip():
 
 
 def ensure_dev_cert(ip: str):
-    """Create a self-signed cert for local HTTPS (required by iOS motion sensors)."""
+    # iOS won't expose motion sensors over plain HTTP on a local IP.
+    # Regenerate the cert if the PC's WiFi address changed.
     CERT_DIR.mkdir(exist_ok=True)
     marker = CERT_DIR / ".ip"
     openssl_cnf = CERT_DIR / "openssl.cnf"
@@ -159,6 +171,7 @@ IP.2 = {ip}
 
 
 def main():
+    # 0.0.0.0 so the phone on the same WiFi can reach us, not just localhost.
     host = "0.0.0.0"
     port = 8000
     ip = local_ip()
