@@ -2,7 +2,7 @@
 
 Tracker em tempo real com **sensores do telemóvel** + **página web** + **backend Python no PC** (mesma WiFi).
 
-**Estado atual:** Fase 1 concluída — gráfico live de acelerómetro e giroscópio, sem ML ainda.
+**Estado atual:** Fase 2 — gráfico live + envio de buffers ao PC via `POST /sensor` (sem ML ainda).
 
 Roadmap completo: [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md)
 
@@ -47,8 +47,10 @@ Estas dependências também estão listadas no `environment.yml`.
 Na raiz do projeto:
 
 ```bash
-python src/app/serve_web.py
+python src/app/main.py
 ```
+
+(`serve_web.py` também funciona — é um alias.)
 
 O terminal mostra algo como:
 
@@ -97,8 +99,55 @@ https://192.168.1.95:8000
 | **Accelerometer** | `acc_x`, `acc_y`, `acc_z` em m/s² |
 | **Gyroscope** | Rotação alpha / beta / gamma em deg/s |
 | **Gráfico live** | Três linhas (X vermelho, Y verde, Z azul) |
+| **Packets sent** | Quantos buffers enviados ao PC (~1.5 s cada) |
+| **PC total samples** | Total de leituras recebidas pelo backend |
+| **Last response** | `ok` se o PC respondeu ao último envio |
+
+No terminal do PC deves ver linhas como:
+
+```
+POST /sensor: 45 readings (acc_z 9.81 → 10.12, total 450)
+```
 
 Experimenta posições diferentes (braço, bolso, mão) e anota qual dá sinal mais estável — isso será útil nas fases de gravação e re-treino.
+
+---
+
+## Fase 2 — fluxo de dados
+
+```
+iPhone sensores → devicemotion (local)
+                      ↓
+                 sendBuffer (JS)
+                      ↓  fetch POST ~1.5 s
+                 PC FastAPI /sensor
+                      ↓
+                 {"status": "ok", "received": N, ...}
+```
+
+Formato enviado pelo telemóvel:
+
+```json
+{
+  "readings": [
+    {
+      "t": 1730000000123,
+      "acc_x": 0.12,
+      "acc_y": -0.05,
+      "acc_z": 9.81,
+      "gyro_x": 1.2,
+      "gyro_y": 0.0,
+      "gyro_z": -0.3
+    }
+  ]
+}
+```
+
+Para hosting cloud (Fase 6), edita `API_URL` no topo de `web/app.js`:
+
+```javascript
+const API_URL = "https://your-app.onrender.com";
+```
 
 ---
 

@@ -10,7 +10,7 @@
     <main class="container">
       <header>
         <h1>Live Sensor Test</h1>
-        <p class="subtitle">Phase 1 — phone accelerometer and gyroscope</p>
+        <p class="subtitle">Phase 2 — live sensors + send to PC</p>
       </header>
 
       <section class="card">
@@ -27,8 +27,26 @@
           <strong id="sample-rate">0.0 Hz</strong>
         </div>
         <div>
-          <span class="label">Buffer size</span>
+          <span class="label">Chart buffer</span>
           <strong id="sample-count">0</strong>
+        </div>
+        <div>
+          <span class="label">Packets sent</span>
+          <strong id="packets-sent">0</strong>
+        </div>
+        <div>
+          <span class="label">PC total samples</span>
+          <strong id="backend-total">—</strong>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Backend</h2>
+        <div class="stats-grid">
+          <div>
+            <span class="label">Last response</span>
+            <strong id="backend-status" data-type="info">—</strong>
+          </div>
         </div>
       </section>
 

@@ -1,12 +1,20 @@
 const MAX_SAMPLES = 120;
 const CHART_PADDING = 24;
+const SEND_INTERVAL_MS = 1500;
+
+// Empty string = same origin (local dev). For cloud hosting: "https://your-app.onrender.com"
+const API_URL = "";
 
 const state = {
   active: false,
   samples: [],
   sampleTimes: [],
+  sendBuffer: [],
+  sendTimer: null,
   lastSampleMs: null,
   estimatedHz: 0,
+  packetsSent: 0,
+  lastBackendStatus: null,
 };
 
 const elements = {
@@ -21,14 +29,28 @@ const elements = {
   gyroZ: document.getElementById("gyro-z"),
   sampleRate: document.getElementById("sample-rate"),
   sampleCount: document.getElementById("sample-count"),
+  packetsSent: document.getElementById("packets-sent"),
+  backendTotal: document.getElementById("backend-total"),
+  backendStatus: document.getElementById("backend-status"),
   canvas: document.getElementById("motion-chart"),
 };
 
 const ctx = elements.canvas.getContext("2d");
 
+function apiBase() {
+  return API_URL || window.location.origin;
+}
+
 function setStatus(message, type = "info") {
   elements.status.textContent = message;
   elements.status.dataset.type = type;
+}
+
+function updateBackendUI(data) {
+  elements.packetsSent.textContent = String(state.packetsSent);
+  elements.backendTotal.textContent = String(data?.total_samples ?? "—");
+  elements.backendStatus.textContent = data?.status ?? "—";
+  elements.backendStatus.dataset.type = data?.status === "ok" ? "success" : "error";
 }
 
 function resizeCanvas() {
@@ -69,6 +91,24 @@ function updateSampleRate(now) {
   elements.sampleRate.textContent = `${state.estimatedHz.toFixed(1)} Hz`;
 }
 
+function storeReading(event) {
+  const acc = event.accelerationIncludingGravity;
+  const gyro = event.rotationRate;
+  if (!acc || acc.x == null) {
+    return;
+  }
+
+  state.sendBuffer.push({
+    t: Date.now(),
+    acc_x: acc.x,
+    acc_y: acc.y,
+    acc_z: acc.z,
+    gyro_x: gyro?.alpha ?? null,
+    gyro_y: gyro?.beta ?? null,
+    gyro_z: gyro?.gamma ?? null,
+  });
+}
+
 function pushSample(event) {
   const acc = event.accelerationIncludingGravity;
   if (!acc || acc.x == null) {
@@ -88,6 +128,47 @@ function pushSample(event) {
 
   elements.sampleCount.textContent = String(state.samples.length);
   drawChart();
+}
+
+async function flushSendBuffer() {
+  if (state.sendBuffer.length === 0) {
+    return;
+  }
+
+  const readings = state.sendBuffer.splice(0);
+
+  try {
+    const response = await fetch(`${apiBase()}/sensor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ readings }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    state.packetsSent += 1;
+    state.lastBackendStatus = data;
+    updateBackendUI(data);
+  } catch (error) {
+    elements.backendStatus.textContent = "error";
+    elements.backendStatus.dataset.type = "error";
+    setStatus(`Backend error: ${error.message}`, "error");
+  }
+}
+
+function startSendLoop() {
+  stopSendLoop();
+  state.sendTimer = setInterval(flushSendBuffer, SEND_INTERVAL_MS);
+}
+
+function stopSendLoop() {
+  if (state.sendTimer != null) {
+    clearInterval(state.sendTimer);
+    state.sendTimer = null;
+  }
 }
 
 function drawSeries(samples, key, color, min, max, width, height) {
@@ -157,6 +238,7 @@ function onDeviceMotion(event) {
     return;
   }
   updateReadouts(event);
+  storeReading(event);
   pushSample(event);
 }
 
@@ -208,19 +290,26 @@ async function startTracking() {
   state.active = true;
   state.samples = [];
   state.sampleTimes = [];
+  state.sendBuffer = [];
   state.lastSampleMs = null;
   state.estimatedHz = 0;
+  state.packetsSent = 0;
+  state.lastBackendStatus = null;
 
   window.addEventListener("devicemotion", onDeviceMotion);
+  startSendLoop();
   elements.startBtn.disabled = true;
   elements.stopBtn.disabled = false;
-  setStatus("Tracking active. Move the phone to see live data.", "success");
+  setStatus("Tracking active. Sending sensor data to PC every ~1.5 s.", "success");
   drawChart();
+  updateBackendUI(null);
 }
 
-function stopTracking() {
+async function stopTracking() {
   state.active = false;
   window.removeEventListener("devicemotion", onDeviceMotion);
+  stopSendLoop();
+  await flushSendBuffer();
   elements.startBtn.disabled = false;
   elements.stopBtn.disabled = true;
   setStatus("Tracking stopped.", "info");

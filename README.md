@@ -69,7 +69,8 @@ MLFitnessTracker/
 │   │   ├── predict_model.py      # Inferência com modelo guardado
 │   │   └── LearningAlgorithms.py # Wrapper dos classificadores sklearn
 │   ├── app/
-│   │   └── serve_web.py          # Servidor HTTPS para live tracker (Fase 1)
+│   │   ├── main.py               # FastAPI: HTTPS + POST /sensor (Fase 2+)
+│   │   └── serve_web.py          # Alias para main.py
 │   └── visualization/
 │       └── plot_settings.py
 ├── web/                          # Frontend live tracker (HTML/JS/CSS)

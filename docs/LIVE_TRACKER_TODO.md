@@ -37,14 +37,20 @@ No iPhone: usar **Safari**, aceitar aviso de certificado, depois Start → permi
 
 **Objetivo:** Telefóvel envia dados → PC recebe.
 
-- [ ] Criar `src/app/main.py` com **FastAPI**
-- [ ] Endpoint `POST /sensor` — recebe JSON com buffer de leituras
-- [ ] Servir a página web estática (pasta `web/`)
-- [ ] Frontend envia buffer a cada ~1–2 s
-- [ ] `API_URL` configurável (`http://192.168.x.x:8000`)
-- [ ] Descobrir IP do PC na WiFi e testar no telemóvel
+- [x] Criar `src/app/main.py` com **FastAPI**
+- [x] Endpoint `POST /sensor` — recebe JSON com buffer de leituras
+- [x] Servir a página web estática (pasta `web/`)
+- [x] Frontend envia buffer a cada ~1–2 s
+- [x] `API_URL` configurável (`""` = same origin; cloud depois)
+- [ ] Testar no telemóvel e ver logs `POST /sensor` no PC
 
-**Entregável:** Telefóvel → PC; PC responde (ex.: `{"status": "ok"}`).
+**Como correr:**
+
+```bash
+python src/app/main.py
+```
+
+**Entregável:** Telefóvel → PC; PC responde `{"status": "ok", "received": N, ...}`.
 
 ---
 

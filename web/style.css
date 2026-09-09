@@ -38,11 +38,13 @@ header h1 {
   font-size: 1rem;
 }
 
-#status[data-type="success"] {
+#status[data-type="success"],
+#backend-status[data-type="success"] {
   color: #4ade80;
 }
 
-#status[data-type="error"] {
+#status[data-type="error"],
+#backend-status[data-type="error"] {
   color: #f87171;
 }
 
