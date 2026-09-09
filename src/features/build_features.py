@@ -1,3 +1,16 @@
+import os
+import warnings
+
+# Avoid noisy Windows warnings from joblib/sklearn during KMeans.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", "4")
+warnings.filterwarnings("ignore", message="KMeans is known to have a memory leak*")
+warnings.filterwarnings("ignore", message="Could not find the number of physical cores*")
+
+import matplotlib
+
+matplotlib.use("Agg")
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,17 +36,17 @@ plt.rcParams["lines.linewidth"] = 2
 # --------------------------------------------------------------
 # Dealing with missing values (imputation)
 # --------------------------------------------------------------
+# Interpolate within each set; outlier removal can leave NaN at edges.
+# filtfilt/PCA fail if any NaN remain — bfill/ffill handles the last gaps.
 for col in predictor_columns:
-    df[col] = df[col].interpolate()
+    df[col] = df.groupby("set")[col].transform(
+        lambda series: series.interpolate(limit_direction="both")
+    )
+    df[col] = df[col].bfill().ffill()
 
 # --------------------------------------------------------------
 # Calculating set duration
 # --------------------------------------------------------------
-
-df[df["set"] == 5]["acc_y"].plot()
-
-duration = df[df["set"] == 5].index[-1] - df[df["set"] == 5].index[0]
-duration.seconds
 
 for s in df["set"].unique():
     start = df[df["set"] == s].index[0]
@@ -71,8 +84,6 @@ PCA = PrincipalComponentAnalysis()
 pc_values = PCA.determine_pc_explained_variance(df_pca, predictor_columns)
 df_pca = PCA.apply_pca(df_pca, predictor_columns, 3)
 
-subset = df_pca[df_pca["set"] == 35]
-subset[["pca_1", "pca_2", "pca_3"]].plot()
 # --------------------------------------------------------------
 # Sum of squares attributes
 # --------------------------------------------------------------
@@ -84,9 +95,6 @@ gyro_r = (
 
 df_squared["acc_r"] = np.sqrt(acc_r)
 df_squared["gyro_r"] = np.sqrt(gyro_r)
-
-subset = df_squared[df_squared["set"] == 14]
-subset[["acc_r", "gyro_r"]].plot(subplots=True)
 
 # --------------------------------------------------------------
 # Temporal abstraction
@@ -118,6 +126,7 @@ df_temporal = pd.concat(df_temporal_list)  # para cada set adicionamos a mean e 
 # Frequency features
 # --------------------------------------------------------------
 df_freq = df_temporal.copy().reset_index()
+time_col = df_freq.columns[0]  # epoch_ms (phone) or epoch (ms) (MetaMotion)
 FreqAbs = FourierTransformation()
 
 fs = int(1000 / 200)
@@ -132,7 +141,7 @@ for s in df_freq["set"].unique():
     subset = FreqAbs.abstract_frequency(subset, predictor_columns, ws, fs)
     df_freq_list.append(subset)
 
-df_freq = pd.concat(df_freq_list).set_index("epoch (ms)", drop=True)
+df_freq = pd.concat(df_freq_list).set_index(time_col, drop=True)
 
 # --------------------------------------------------------------
 # Dealing with overlapping windows
@@ -160,7 +169,7 @@ plt.figure(figsize=(10, 10))
 plt.plot(k_values, inertias)
 plt.xlabel("k")
 plt.ylabel("sum of squared distances (inertia)")  # encontrar o elbow para escolher o k
-plt.show()
+plt.close()
 
 kmeans = KMeans(n_clusters=5, n_init=20, random_state=0)
 subset = df_cluster[cluster_columns]
@@ -175,7 +184,7 @@ ax.set_xlabel("X-axis")
 ax.set_ylabel("y-axis")
 ax.set_zlabel("z-axis")
 plt.legend()
-plt.show()
+plt.close()
 
 fig = plt.figure(figsize=(15, 15))
 ax = fig.add_subplot(projection="3d")
@@ -186,7 +195,7 @@ ax.set_xlabel("X-axis")
 ax.set_ylabel("y-axis")
 ax.set_zlabel("z-axis")
 plt.legend()
-plt.show()
+plt.close()
 # --------------------------------------------------------------
 # Export dataset
 # --------------------------------------------------------------

@@ -1,3 +1,7 @@
+import matplotlib
+
+matplotlib.use("Agg")
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,9 +25,12 @@ plt.rcParams["figure.figsize"] = (20, 5)
 plt.rcParams["figure.dpi"] = 100
 
 df.boxplot(column="acc_y", by="label", figsize=(20, 10))
+plt.close()
 
 df.boxplot(column=outlier_columns[:3], by="label", figsize=(20, 10), layout=(1, 3))
+plt.close()
 df.boxplot(column=outlier_columns[3:], by="label", figsize=(20, 10), layout=(1, 3))
+plt.close()
 
 
 def plot_binary_outliers(dataset, col, outlier_col, reset_index):
@@ -70,7 +77,7 @@ def plot_binary_outliers(dataset, col, outlier_col, reset_index):
         fancybox=True,
         shadow=True,
     )
-    plt.show()
+    plt.close(fig)
 
 
 # --------------------------------------------------------------

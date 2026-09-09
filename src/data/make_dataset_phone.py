@@ -79,7 +79,7 @@ def main():
             }
         ).dropna(subset=["acc_x", "acc_y", "acc_z"])
         sessions.append(resampled)
-        print(f"  set {set_id}: {Path(filepath).name} → {len(resampled)} rows @ 5 Hz")
+        print(f"  set {set_id}: {Path(filepath).name} -> {len(resampled)} rows @ 5 Hz")
 
     data = pd.concat(sessions)
     data["set"] = data["set"].astype(int)
@@ -88,7 +88,7 @@ def main():
     out_path = DATA_INTERIM / "01_data_processed_phone.pkl"
     data.to_pickle(out_path)
 
-    print(f"\nSaved {len(data)} rows, {data['set'].nunique()} sets → {out_path}")
+    print(f"\nSaved {len(data)} rows, {data['set'].nunique()} sets -> {out_path}")
     print("Next: point remove_outliers.py at 01_data_processed_phone.pkl, or copy/rename")
     print("      to 01_data_processed.pkl, then run the usual pipeline + save_model.py")
 

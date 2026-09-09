@@ -39,7 +39,13 @@ def main():
     artifact = load_model()
     df = pd.read_pickle(DATA_INTERIM / "03_data_features.pkl")
 
-    test_df = df[df["participant"] == artifact["test_participant"]]
+    if artifact.get("test_sets"):
+        test_df = df[df["set"].isin(artifact["test_sets"])]
+        test_label = f"{artifact['test_participant']} (holdout sets)"
+    else:
+        test_df = df[df["participant"] == artifact["test_participant"]]
+        test_label = artifact["test_participant"]
+
     predictions, _ = predict_exercises(test_df, artifact)
 
     results = test_df[["label", "participant", "set"]].copy()
@@ -63,9 +69,8 @@ def main():
         ]
     ]
 
-    participant = artifact["test_participant"]
     accuracy = (results["correct"] == "Yes").mean()
-    print(f"Overall accuracy (participant {participant}): {accuracy * 100:.1f}%\n")
+    print(f"Overall accuracy ({test_label}): {accuracy * 100:.1f}%\n")
 
     print("Accuracy by exercise:")
     accuracy_by_exercise = (
@@ -77,7 +82,7 @@ def main():
         print(f"  - {format_exercise(label)}: {score * 100:.1f}%")
     print()
 
-    print(f"All predictions (participant {participant}):")
+    print(f"All predictions ({test_label}):")
     pd.set_option("display.max_rows", None)
     pd.set_option("display.max_columns", None)
     pd.set_option("display.width", None)
