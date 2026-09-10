@@ -43,6 +43,7 @@ _log_state = {
     "warmup_milestone": -1,
 }
 LOG_HEARTBEAT_SEC = 8.0
+CONFIDENCE_MIN = 0.55  # match web/app.js — ignore low-confidence predictions
 
 app = FastAPI(title="ML Fitness Tracker Live")
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
@@ -141,8 +142,15 @@ def log_prediction(result):
             _log_state["warmup_milestone"] = milestone
         return
 
-    exercise = result.get("exercise_name") or result.get("exercise", "?")
     confidence = result.get("confidence") or 0.0
+    if confidence <= CONFIDENCE_MIN:
+        if _log_state["exercise"] is not None:
+            print(f"[live] -- Incerto ({confidence:.0%})")
+            _log_state["exercise"] = None
+            _log_state["last_log_at"] = now
+        return
+
+    exercise = result.get("exercise_name") or result.get("exercise", "?")
     changed = exercise != _log_state["exercise"]
     heartbeat = now - _log_state["last_log_at"] >= LOG_HEARTBEAT_SEC
 

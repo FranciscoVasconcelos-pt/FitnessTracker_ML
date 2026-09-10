@@ -5,6 +5,7 @@ const SEND_INTERVAL_MS = 250;  // max gap between POST /predict (live feel)
 const MIN_SEND_INTERVAL_MS = 200;
 const SEND_BATCH_SIZE = 10;    // also send when this many samples are queued
 const VOTE_REQUIRED = 3;       // consecutive matching predictions before UI updates
+const CONFIDENCE_MIN = 0.55;   // only show exercise above this confidence
 
 // Empty = same server as the page. Set a full URL when we deploy to the cloud.
 const API_URL = "";
@@ -97,11 +98,13 @@ function streakFromEnd(label) {
 function recordVote(data) {
   const label = data.exercise;
   const name = data.exercise_name || label;
-  state.voteBuffer.push({
-    label,
-    name,
-    confidence: data.confidence ?? 0,
-  });
+  const confidence = data.confidence ?? 0;
+
+  if (confidence <= CONFIDENCE_MIN) {
+    return { label, name, streak: 0, confirmed: false, lowConfidence: true, confidence };
+  }
+
+  state.voteBuffer.push({ label, name, confidence });
   if (state.voteBuffer.length > VOTE_REQUIRED * 2) {
     state.voteBuffer.shift();
   }
@@ -112,11 +115,13 @@ function recordVote(data) {
     const recent = state.voteBuffer.slice(-VOTE_REQUIRED);
     const avgConfidence =
       recent.reduce((sum, vote) => sum + vote.confidence, 0) / recent.length;
-    state.displayedExercise = name;
-    state.displayedConfidence = avgConfidence;
+    if (avgConfidence > CONFIDENCE_MIN) {
+      state.displayedExercise = name;
+      state.displayedConfidence = avgConfidence;
+    }
   }
 
-  return { label, name, streak, confirmed };
+  return { label, name, streak, confirmed, lowConfidence: false, confidence };
 }
 
 function updatePredictionUI(data) {
@@ -142,30 +147,38 @@ function updatePredictionUI(data) {
 
   if (data.status === "ok") {
     const vote = recordVote(data);
+    const showExercise =
+      state.displayedExercise &&
+      state.displayedConfidence != null &&
+      state.displayedConfidence > CONFIDENCE_MIN;
 
-    if (state.displayedExercise) {
+    if (showExercise) {
       elements.predictExercise.textContent = state.displayedExercise;
-      elements.predictConfidence.textContent =
-        state.displayedConfidence != null
-          ? `${Math.round(state.displayedConfidence * 100)}%`
-          : "—";
+      elements.predictConfidence.textContent = `${Math.round(state.displayedConfidence * 100)}%`;
     } else {
-      elements.predictExercise.textContent = vote.streak > 0 ? vote.name : "…";
+      elements.predictExercise.textContent = "Incerto";
       elements.predictConfidence.textContent =
-        data.confidence != null ? `${Math.round(data.confidence * 100)}%` : "—";
+        vote.confidence > 0 ? `${Math.round(vote.confidence * 100)}%` : "—";
     }
 
     const pendingChange =
+      !vote.lowConfidence &&
       vote.streak > 0 &&
       vote.streak < VOTE_REQUIRED &&
       (!state.displayedExercise || vote.name !== state.displayedExercise);
 
-    if (pendingChange) {
+    if (vote.lowConfidence) {
+      elements.predictStatus.textContent = "Confiança baixa (<55%)";
+      elements.predictStatus.dataset.type = "info";
+    } else if (pendingChange) {
       elements.predictStatus.textContent = `A confirmar ${vote.name} (${vote.streak}/${VOTE_REQUIRED})…`;
       elements.predictStatus.dataset.type = "info";
-    } else {
+    } else if (showExercise) {
       elements.predictStatus.textContent = "Live prediction";
       elements.predictStatus.dataset.type = "success";
+    } else {
+      elements.predictStatus.textContent = "À espera de confiança >55%";
+      elements.predictStatus.dataset.type = "info";
     }
   }
 }
