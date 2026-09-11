@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 APP_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP_DIR))
-from predict_live import LivePredictor  # noqa: E402
+from predict_live import EXERCISE_NAMES, LivePredictor  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
@@ -97,8 +97,26 @@ class PredictResponse(BaseModel):
     samples: Optional[int] = None
     buffer_samples: Optional[int] = None
     resampled_rows: Optional[int] = None
+    reps: Optional[int] = None
+    rep_target: Optional[int] = None
+    counting: Optional[bool] = None
+    locked_exercise: Optional[str] = None
+    locked_exercise_name: Optional[str] = None
+    set_complete: Optional[bool] = None
     total_samples: int
     total_packets: int
+
+
+class RepTargetPayload(BaseModel):
+    target: int = Field(5, ge=1, le=20)
+
+
+class LockExercisePayload(BaseModel):
+    exercise: str
+
+
+class ResetRepsPayload(BaseModel):
+    exercise: Optional[str] = None
 
 
 # Static files — the phone loads these once, then runs JS locally.
@@ -237,6 +255,53 @@ def reset_predictor():
     reset_log_state()
     print("[live] Sessão reiniciada — à espera de predição.")
     return {"status": "ok"}
+
+
+@app.post("/predict/reset-reps")
+def reset_reps(payload: ResetRepsPayload = ResetRepsPayload()):
+    predictor = get_live_predictor()
+    predictor.reset_reps(payload.exercise)
+    locked = predictor.locked_rep_exercise
+    name = None
+    if locked:
+        name = EXERCISE_NAMES.get(locked, locked)
+    print(f"[live] Reps reset — counting {name or '—'}")
+    return {
+        "status": "ok",
+        "reps": 0,
+        "counting": predictor.rep_counting_active,
+        "locked_exercise": locked,
+        "locked_exercise_name": name,
+    }
+
+
+@app.post("/predict/rep-target")
+def set_rep_target(payload: RepTargetPayload):
+    predictor = get_live_predictor()
+    predictor.set_rep_target(payload.target)
+    return {"status": "ok", "rep_target": predictor.rep_target}
+
+
+@app.post("/predict/lock-exercise")
+def lock_exercise(payload: LockExercisePayload):
+    predictor = get_live_predictor()
+    predictor.lock_exercise(payload.exercise)
+    return {
+        "status": "ok",
+        "locked_exercise": predictor.locked_rep_exercise,
+    }
+
+
+@app.post("/predict/end-set")
+def end_set():
+    predictor = get_live_predictor()
+    predictor.end_set()
+    print(f"[live] Set complete — {predictor.rep_count} reps")
+    return {
+        "status": "ok",
+        "reps": predictor.rep_count,
+        "set_complete": True,
+    }
 
 
 # Save a full training set from the phone (one exercise = one CSV).

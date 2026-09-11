@@ -40,7 +40,8 @@ header h1 {
 
 #status[data-type="success"],
 #backend-status[data-type="success"],
-#predict-status[data-type="success"] {
+#predict-status[data-type="success"],
+#rep-counting-status[data-type="success"] {
   color: #4ade80;
 }
 
@@ -69,6 +70,69 @@ header h1 {
 .confidence {
   color: #94a3b8;
   font-size: 1rem;
+}
+
+.rep-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #1f2937;
+  flex-wrap: wrap;
+}
+
+#predict-reps {
+  font-size: 2rem;
+  margin-right: 4px;
+}
+
+.rep-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rep-actions label {
+  display: block;
+}
+
+.rep-actions select {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-size: 0.95rem;
+}
+
+#reset-reps-btn {
+  background: #059669;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+#end-set-btn {
+  background: #374151;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+#reset-reps-btn:disabled,
+#end-set-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .actions {

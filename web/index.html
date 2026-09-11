@@ -47,6 +47,36 @@
           <span id="predict-confidence" class="confidence">—</span>
         </div>
         <p id="predict-status" class="hint" data-type="info">Waiting for data…</p>
+        <p class="hint">Pick exercise below, tap <strong>Start set</strong>, then do your reps. Works even if ML shows Incerto.</p>
+        <div class="rep-row">
+          <div>
+            <span class="label">Reps</span>
+            <strong id="predict-reps">0</strong>
+            <span id="predict-rep-target" class="confidence">/ 5</span>
+            <p id="rep-counting-status" class="hint">Not counting</p>
+          </div>
+          <div class="rep-actions">
+            <label>
+              <span class="label">Exercise (reps)</span>
+              <select id="rep-exercise">
+                <option value="squat">Squat</option>
+                <option value="bench">Bench</option>
+                <option value="ohp">Overhead press</option>
+                <option value="row">Row</option>
+                <option value="dead">Deadlift</option>
+              </select>
+            </label>
+            <label>
+              <span class="label">Target</span>
+              <select id="rep-target">
+                <option value="5">5 reps</option>
+                <option value="10">10 reps</option>
+              </select>
+            </label>
+            <button id="reset-reps-btn" type="button" disabled>Start set</button>
+            <button id="end-set-btn" type="button" disabled>End set</button>
+          </div>
+        </div>
       </section>
 
       <section class="card">

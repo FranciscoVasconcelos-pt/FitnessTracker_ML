@@ -31,6 +31,11 @@ const state = {
   voteBuffer: [],
   displayedExercise: null,
   displayedConfidence: null,
+  displayedReps: 0,
+  repTarget: 5,
+  repExercise: "squat",
+  repCountingActive: false,
+  confirmedExerciseLabel: null,
 };
 
 const elements = {
@@ -51,6 +56,13 @@ const elements = {
   predictExercise: document.getElementById("predict-exercise"),
   predictConfidence: document.getElementById("predict-confidence"),
   predictStatus: document.getElementById("predict-status"),
+  predictReps: document.getElementById("predict-reps"),
+  predictRepTarget: document.getElementById("predict-rep-target"),
+  repCountingStatus: document.getElementById("rep-counting-status"),
+  repExerciseSelect: document.getElementById("rep-exercise"),
+  repTargetSelect: document.getElementById("rep-target"),
+  resetRepsBtn: document.getElementById("reset-reps-btn"),
+  endSetBtn: document.getElementById("end-set-btn"),
   recordLabel: document.getElementById("record-label"),
   recordCategory: document.getElementById("record-category"),
   recordParticipant: document.getElementById("record-participant"),
@@ -82,6 +94,103 @@ function resetVoteState() {
   state.voteBuffer = [];
   state.displayedExercise = null;
   state.displayedConfidence = null;
+  state.displayedReps = 0;
+  state.confirmedExerciseLabel = null;
+}
+
+function updateRepsUI(data) {
+  const target = data?.rep_target ?? state.repTarget;
+  if (data?.reps != null) {
+    state.displayedReps = data.reps;
+  }
+  if (data?.counting != null) {
+    state.repCountingActive = data.counting;
+  }
+
+  elements.predictReps.textContent = String(state.displayedReps);
+  elements.predictRepTarget.textContent = `/ ${target}`;
+  elements.predictRepTarget.dataset.complete =
+    state.repCountingActive && state.displayedReps >= target ? "true" : "false";
+  if (elements.predictRepTarget.dataset.complete === "true") {
+    elements.predictRepTarget.style.color = "#4ade80";
+  } else {
+    elements.predictRepTarget.style.color = "";
+  }
+
+  if (data?.set_complete) {
+    state.repCountingActive = false;
+    elements.repCountingStatus.textContent = `Set complete — ${state.displayedReps} reps`;
+    elements.repCountingStatus.dataset.type = "success";
+  } else if (state.repCountingActive) {
+    const name = data?.locked_exercise_name || state.repExercise;
+    elements.repCountingStatus.textContent = `Counting: ${name}`;
+    elements.repCountingStatus.dataset.type = "success";
+  } else {
+    elements.repCountingStatus.textContent = "Tap Start set before reps";
+    elements.repCountingStatus.dataset.type = "info";
+  }
+}
+
+async function syncRepTarget(target) {
+  state.repTarget = target;
+  try {
+    await fetch(`${apiBase()}/predict/rep-target`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
+async function startSet() {
+  const exercise = elements.repExerciseSelect.value;
+  state.repExercise = exercise;
+  try {
+    const response = await fetch(`${apiBase()}/predict/reset-reps`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exercise }),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    state.displayedReps = 0;
+    state.repCountingActive = true;
+    updateRepsUI({
+      reps: 0,
+      rep_target: state.repTarget,
+      counting: true,
+      locked_exercise: exercise,
+      locked_exercise_name: data.locked_exercise_name,
+    });
+    elements.endSetBtn.disabled = false;
+    setStatus(`Set started — counting ${data.locked_exercise_name || exercise}`, "success");
+  } catch (error) {
+    setStatus(`Start set failed: ${error.message}`, "error");
+  }
+}
+
+async function endSet() {
+  try {
+    const response = await fetch(`${apiBase()}/predict/end-set`, { method: "POST" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    state.repCountingActive = false;
+    updateRepsUI({
+      reps: data.reps ?? state.displayedReps,
+      rep_target: state.repTarget,
+      counting: false,
+      set_complete: true,
+    });
+    setStatus(`Set done — ${data.reps ?? state.displayedReps} reps`, "success");
+  } catch (error) {
+    setStatus(`End set failed: ${error.message}`, "error");
+  }
 }
 
 function streakFromEnd(label) {
@@ -116,6 +225,7 @@ function recordVote(data) {
     const avgConfidence =
       recent.reduce((sum, vote) => sum + vote.confidence, 0) / recent.length;
     if (avgConfidence > CONFIDENCE_MIN) {
+      state.confirmedExerciseLabel = label;
       state.displayedExercise = name;
       state.displayedConfidence = avgConfidence;
     }
@@ -131,6 +241,7 @@ function updatePredictionUI(data) {
     elements.predictConfidence.textContent = "—";
     elements.predictStatus.textContent = "Waiting for data…";
     elements.predictStatus.dataset.type = "info";
+    updateRepsUI(null);
     return;
   }
 
@@ -142,6 +253,7 @@ function updatePredictionUI(data) {
     elements.predictStatus.textContent =
       (data.message || "Collecting sensor data…") + progress;
     elements.predictStatus.dataset.type = "info";
+    updateRepsUI(data);
     return;
   }
 
@@ -180,6 +292,8 @@ function updatePredictionUI(data) {
       elements.predictStatus.textContent = "À espera de confiança >55%";
       elements.predictStatus.dataset.type = "info";
     }
+
+    updateRepsUI(data);
   }
 }
 
@@ -488,12 +602,16 @@ async function startTracking() {
   elements.startBtn.disabled = true;
   elements.stopBtn.disabled = false;
   elements.recordStartBtn.disabled = false;
+  elements.resetRepsBtn.disabled = false;
+  elements.endSetBtn.disabled = true;
   setStatus("Tracking active. Live predictions ~4×/s after warm-up.", "success");
   drawChart();
   updateBackendUI(null);
   updatePredictionUI(null);
+  updateRepsUI({ reps: 0, rep_target: state.repTarget, counting: false });
 
   fetch(`${apiBase()}/predict/reset`, { method: "POST" }).catch(() => {});
+  syncRepTarget(Number(elements.repTargetSelect.value));
 }
 
 async function stopTracking() {
@@ -509,6 +627,8 @@ async function stopTracking() {
   elements.startBtn.disabled = false;
   elements.stopBtn.disabled = true;
   elements.recordStartBtn.disabled = true;
+  elements.resetRepsBtn.disabled = true;
+  elements.endSetBtn.disabled = true;
   setStatus("Tracking stopped.", "info");
 }
 
@@ -567,6 +687,12 @@ elements.startBtn.addEventListener("click", startTracking);
 elements.stopBtn.addEventListener("click", stopTracking);
 elements.recordStartBtn.addEventListener("click", startRecording);
 elements.recordSaveBtn.addEventListener("click", saveRecording);
+elements.resetRepsBtn.addEventListener("click", startSet);
+elements.endSetBtn.addEventListener("click", endSet);
+elements.repTargetSelect.addEventListener("change", () => {
+  syncRepTarget(Number(elements.repTargetSelect.value));
+  updateRepsUI({ reps: state.displayedReps, rep_target: state.repTarget, counting: true });
+});
 window.addEventListener("resize", resizeCanvas);
 
 resizeCanvas();
