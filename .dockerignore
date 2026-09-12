@@ -1,0 +1,14 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+.mypy_cache
+.idea
+.vscode
+certs/
+data/
+notebooks/
+reports/
+*.md
+environment.yml
+scripts/

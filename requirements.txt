@@ -1,0 +1,9 @@
+# Production deps for hosting (Render / Railway / Docker).
+# Pin numpy for joblib model compatibility.
+numpy==1.23.5
+pandas==1.5.2
+scipy
+scikit-learn
+joblib
+fastapi
+uvicorn[standard]

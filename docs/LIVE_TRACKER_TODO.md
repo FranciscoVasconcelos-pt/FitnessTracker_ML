@@ -59,37 +59,29 @@ O modelo MetaMotion (~99%) continua como **baseline offline**; o modelo re-trein
 
 ---
 
-## Fase 3 — Gravar dados + re-treino (Opção C) — em curso
-
-**Objetivo:** Dados do telemóvel alimentam o pipeline existente.
+## Fase 3 — Gravar dados + re-treino (Opção C) ✅
 
 - [x] Modo “gravar” no site + `POST /record` → CSV em `data/raw/phone/`
-- [x] `src/data/make_dataset_phone.py` — ingestão e reamostragem a 5 Hz
-- [ ] Gravar 5–10 sets por exercício (bench, squat, row, ohp, dead, rest)
-- [ ] Posição **sempre igual** (ex.: braço direito)
-- [ ] Correr pipeline com dados phone → `save_model.py` → substituir `.pkl`
-
-**Depois do re-treino:**
-
-- [ ] `POST /predict` — buffer → features → `exercise_classifier.pkl`
-- [ ] UI no telemóvel mostra exercício previsto
-- [ ] Replay de CSV (validar backend antes do ginásio)
+- [x] `src/data/make_dataset_phone.py`
+- [x] Pipeline + `save_model.py` (~93% holdout)
+- [x] `POST /predict` + UI live + votação
 
 ---
 
-## Fase 4 — Reps live (opcional)
+## Fase 4 — Reps live — em pausa
 
-- [ ] Peak detection no buffer
-- [ ] Contador de reps no ecrã
-- [ ] Reduzir `SEND_INTERVAL_MS` se necessário
+- [x] Peak detection + contador no ecrã
+- [ ] Afinar (falsos reps em descanso) — **depois do hosting**
 
 ---
 
-## Fase 5 — Hosting
+## Fase 5 — Hosting — em curso
 
-- [ ] Deploy FastAPI (Render / Railway)
-- [ ] `API_URL` HTTPS no frontend
-- [ ] Testar no ginásio
+- [x] Modo produção (`PORT` / Docker, sem cert local)
+- [x] `ENABLE_RECORDING=false` no cloud
+- [x] `Dockerfile` + `render.yaml` + `requirements.txt`
+- [ ] Push GitHub + deploy Render/Railway
+- [ ] Testar no ginásio com URL HTTPS
 
 ---
 
@@ -119,7 +111,7 @@ MLFitnessTracker/
 
 ## Próximo passo
 
-1. Arrancar `python src/app/main.py`
-2. Gravar sets no iPhone (Record set → Save to PC)
-3. `python src/data/make_dataset_phone.py`
-4. Pipeline + `save_model.py`
+1. Commit + push (inclui `models/*.pkl`, `Dockerfile`, `render.yaml`)
+2. Render → Blueprint ou Web Service (Docker)
+3. Abrir URL HTTPS no iPhone (Safari) e testar ML live
+4. Reps: afinar depois

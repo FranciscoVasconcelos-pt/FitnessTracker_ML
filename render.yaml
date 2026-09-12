@@ -1,0 +1,11 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Connect repo → New Blueprint → select this file.
+services:
+  - type: web
+    name: ml-fitness-tracker
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENABLE_RECORDING
+        value: false

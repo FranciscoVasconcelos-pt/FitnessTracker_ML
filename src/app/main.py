@@ -46,10 +46,19 @@ LOG_HEARTBEAT_SEC = 8.0
 CONFIDENCE_MIN = 0.55  # match web/app.js — ignore low-confidence predictions
 
 
+def is_production_host() -> bool:
+    """True on Render/Railway/etc. where the platform terminates HTTPS."""
+    if os.environ.get("PORT"):
+        return True
+    return bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT"))
+
+
 def recording_enabled() -> bool:
-    """Local dev: on by default. Set ENABLE_RECORDING=false on cloud host."""
-    value = os.environ.get("ENABLE_RECORDING", "true").strip().lower()
-    return value in ("1", "true", "yes", "on")
+    """Local dev: on by default. Off on cloud unless ENABLE_RECORDING=true."""
+    value = os.environ.get("ENABLE_RECORDING")
+    if value is not None:
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return not is_production_host()
 
 
 app = FastAPI(title="ML Fitness Tracker Live")
@@ -426,9 +435,15 @@ IP.2 = {ip}
 
 
 def main():
-    # 0.0.0.0 so the phone on the same WiFi can reach server
     host = "0.0.0.0"
-    port = 8000
+    port = int(os.environ.get("PORT", "8000"))
+
+    if is_production_host():
+        print(f"Production server on port {port} (HTTPS via hosting platform).")
+        print("Phone → POST /predict (live ML). Recording:", recording_enabled())
+        uvicorn.run(app, host=host, port=port, access_log=False)
+        return
+
     ip = local_ip()
     ensure_dev_cert(ip)
 

@@ -278,36 +278,79 @@ certs/              # Gerado localmente (não vai para o GitHub)
 
 ## Hosting vs local — gravação de treino
 
-No **PC local** (`python src/app/main.py`), a gravação para treino fica **activa** por defeito — CSVs vão para `data/raw/phone/`.
+| Onde | Gravação | HTTPS |
+|------|----------|-------|
+| **PC local** (`python src/app/main.py`) | Activada | Certificado auto-assinado (`certs/`) |
+| **Cloud** (Render, Railway, Docker) | **Desactivada** por defeito | HTTPS do hosting |
 
-No **host cloud** (Render, Railway, etc.), define:
+No cloud, a secção “Record training set” fica escondida e `POST /record` devolve 403. Treinas sempre no PC local.
+
+Para forçar gravação no cloud (não recomendado): `ENABLE_RECORDING=true`.
+
+---
+
+## Deploy no Render (recomendado)
+
+Precisas do repo no **GitHub** com `models/exercise_classifier.pkl` e `models/live_artifact.pkl` commitados.
+
+### Opção A — Blueprint (mais fácil)
+
+1. [render.com](https://render.com) → **New** → **Blueprint**
+2. Liga o repo GitHub → Render lê `render.yaml`
+3. Deploy → obténs um URL tipo `https://ml-fitness-tracker-xxxx.onrender.com`
+4. No iPhone (**Safari**): abre esse URL → Start → allow motion
+
+### Opção B — Web Service manual
+
+1. **New** → **Web Service** → repo GitHub
+2. **Runtime:** Docker
+3. **Instance type:** Free
+4. Env var: `ENABLE_RECORDING=false` (já vem no Dockerfile)
+5. **Health check path:** `/health`
+6. Deploy
+
+### Testar localmente o Docker (opcional)
 
 ```bash
-ENABLE_RECORDING=false
+docker build -t ml-fitness-tracker .
+docker run -p 8000:8000 ml-fitness-tracker
 ```
 
-| Onde | `ENABLE_RECORDING` | UI “Record training set” | `POST /record` |
-|------|--------------------|--------------------------|----------------|
-| PC local | `true` (default) | Visível | Guarda CSV |
-| Cloud | `false` | Escondida | 403 Forbidden |
+Abre `http://127.0.0.1:8000` no PC. No iPhone precisas de HTTPS real (Render) para sensores.
 
-Assim o modelo público serve só **predict**; os teus dados curados ficam no PC e não misturam com uploads de outros.
+### Railway (alternativa)
+
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
+2. Deteta o `Dockerfile` automaticamente
+3. Gera URL HTTPS → abre no Safari
+
+### Frontend / API_URL
+
+O site e a API estão no **mesmo servidor** — `API_URL` em `web/app.js` fica `""` (same origin). Não precisas de alterar nada para Render.
+
+### Notas importantes
+
+- **Free tier:** o serviço “adormece” após ~15 min sem uso; a primeira abertura demora ~30–60 s (cold start).
+- **Ginásio:** precisas de **WiFi ou dados móveis** — o telemóvel fala com a cloud, não com o PC em casa.
+- **Actualizar modelo:** re-treinas no PC → commit + push dos `.pkl` → Render faz redeploy (ou manual deploy).
+- **Reps:** o contador live funciona, mas ainda precisa de afinação; ML live é o foco do host.
 
 ---
 
 ## Segurança e Git
 
-A pasta `certs/` está no `.gitignore`. **Não commits** `key.pem` nem `cert.pem` — são gerados automaticamente em cada máquina. Os certificados são auto-assinados só para desenvolvimento local; no ginásio (Fase 6) usar-se-á HTTPS real via hosting cloud.
+A pasta `certs/` está no `.gitignore`. **Não commits** `key.pem` nem `cert.pem` — são gerados automaticamente em cada máquina. Os certificados auto-assinados são só para desenvolvimento local.
 
 ---
 
-## Próximos passos (Opção C)
+## Estado do projecto
 
-| Passo | Objetivo |
-|---|---|
-| **Gravar sets** | 5–10 por exercício via Record set / Save to PC |
-| **Pipeline + save_model** | Re-treinar `exercise_classifier.pkl` |
-| **/predict live** | Mostrar exercício previsto no telemóvel |
-| **Reps + hosting** | Fases finais |
+| Fase | Estado |
+|------|--------|
+| Sensores + backend local | ✅ |
+| Gravar + re-treinar (Opção C) | ✅ (~93% holdout) |
+| ML live | ✅ |
+| Reps live | ⚠️ precisa afinação |
+| Hosting | ✅ ficheiros prontos — falta deploy no Render |
 
 Ver [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md).
