@@ -45,6 +45,13 @@ _log_state = {
 LOG_HEARTBEAT_SEC = 8.0
 CONFIDENCE_MIN = 0.55  # match web/app.js — ignore low-confidence predictions
 
+
+def recording_enabled() -> bool:
+    """Local dev: on by default. Set ENABLE_RECORDING=false on cloud host."""
+    value = os.environ.get("ENABLE_RECORDING", "true").strip().lower()
+    return value in ("1", "true", "yes", "on")
+
+
 app = FastAPI(title="ML Fitness Tracker Live")
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
@@ -190,7 +197,13 @@ def health():
         "total_samples": total_samples_received,
         "total_packets": total_packets_received,
         "predictor_ready": predictor_ready,
+        "recording_enabled": recording_enabled(),
     }
+
+
+@app.get("/config")
+def app_config():
+    return {"recording_enabled": recording_enabled()}
 
 
 # Main data path: phone POSTs a batch of acc/gyro readings collected since last send.
@@ -308,6 +321,11 @@ def end_set():
 # Files land in data/raw/phone/ and are picked up by make_dataset_phone.py.
 @app.post("/record", response_model=RecordResponse)
 def save_recording(payload: RecordPayload):
+    if not recording_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Recording is disabled on this server. Use your local PC to save training sets.",
+        )
     if not payload.readings:
         raise HTTPException(status_code=400, detail="No readings in recording.")
 
@@ -418,7 +436,10 @@ def main():
     print(f"Open on this PC:  https://127.0.0.1:{port}")
     print(f"Open on iPhone:   https://{ip}:{port}  (use Safari on ios)")
     print("Phone → POST /predict (live ML), POST /sensor, POST /record (training).")
-    print(f"Recordings saved to: {PHONE_RAW}")
+    if recording_enabled():
+        print(f"Recordings saved to: {PHONE_RAW}")
+    else:
+        print("Recording disabled (ENABLE_RECORDING=false).")
     print("On iPhone: accept the certificate warning, then tap Start.")
     print("Press Ctrl+C to stop.")
     uvicorn.run(

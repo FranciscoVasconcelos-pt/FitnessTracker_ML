@@ -36,6 +36,7 @@ const state = {
   repExercise: "squat",
   repCountingActive: false,
   confirmedExerciseLabel: null,
+  recordingEnabled: true,
 };
 
 const elements = {
@@ -69,6 +70,7 @@ const elements = {
   recordStartBtn: document.getElementById("record-start-btn"),
   recordSaveBtn: document.getElementById("record-save-btn"),
   recordCount: document.getElementById("record-count"),
+  recordSection: document.getElementById("record-training-section"),
   canvas: document.getElementById("motion-chart"),
 };
 
@@ -632,7 +634,28 @@ async function stopTracking() {
   setStatus("Tracking stopped.", "info");
 }
 
+async function loadAppConfig() {
+  try {
+    const response = await fetch(`${apiBase()}/config`);
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    state.recordingEnabled = data.recording_enabled !== false;
+  } catch {
+    state.recordingEnabled = true;
+  }
+
+  if (!state.recordingEnabled && elements.recordSection) {
+    elements.recordSection.hidden = true;
+  }
+}
+
 function startRecording() {
+  if (!state.recordingEnabled) {
+    setStatus("Recording is only available on the local training server.", "error");
+    return;
+  }
   if (!state.active) {
     setStatus("Start tracking first, then record a set.", "error");
     return;
@@ -647,6 +670,10 @@ function startRecording() {
 }
 
 async function saveRecording() {
+  if (!state.recordingEnabled) {
+    setStatus("Recording is only available on the local training server.", "error");
+    return;
+  }
   if (!state.recording || state.recordBuffer.length === 0) {
     setStatus("Nothing to save — record a set first.", "error");
     return;
@@ -696,4 +723,5 @@ elements.repTargetSelect.addEventListener("change", () => {
 window.addEventListener("resize", resizeCanvas);
 
 resizeCanvas();
+loadAppConfig();
 setStatus("Tap Start and allow motion access when prompted.", "info");

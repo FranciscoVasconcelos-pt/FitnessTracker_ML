@@ -276,6 +276,25 @@ certs/              # Gerado localmente (não vai para o GitHub)
 
 ---
 
+## Hosting vs local — gravação de treino
+
+No **PC local** (`python src/app/main.py`), a gravação para treino fica **activa** por defeito — CSVs vão para `data/raw/phone/`.
+
+No **host cloud** (Render, Railway, etc.), define:
+
+```bash
+ENABLE_RECORDING=false
+```
+
+| Onde | `ENABLE_RECORDING` | UI “Record training set” | `POST /record` |
+|------|--------------------|--------------------------|----------------|
+| PC local | `true` (default) | Visível | Guarda CSV |
+| Cloud | `false` | Escondida | 403 Forbidden |
+
+Assim o modelo público serve só **predict**; os teus dados curados ficam no PC e não misturam com uploads de outros.
+
+---
+
 ## Segurança e Git
 
 A pasta `certs/` está no `.gitignore`. **Não commits** `key.pem` nem `cert.pem` — são gerados automaticamente em cada máquina. Os certificados são auto-assinados só para desenvolvimento local; no ginásio (Fase 6) usar-se-á HTTPS real via hosting cloud.
