@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ML Fitness Tracker — Live Sensors</title>
+    <title>ML Fitness Tracker</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <main class="container">
       <header>
-        <h1>Live Sensor Test</h1>
-        <p class="subtitle">Live exercise detection + record sets for retraining</p>
+        <h1>Fitness Tracker</h1>
+        <p class="subtitle">Live exercise detection from phone sensors</p>
       </header>
 
       <section class="card">
@@ -21,33 +21,32 @@
         </div>
       </section>
 
-      <section class="card stats-grid">
+      <section class="stat-strip">
         <div>
           <span class="label">Sample rate</span>
           <strong id="sample-rate">0.0 Hz</strong>
         </div>
         <div>
-          <span class="label">Chart buffer</span>
+          <span class="label">Buffer</span>
           <strong id="sample-count">0</strong>
         </div>
         <div>
-          <span class="label">Packets sent</span>
+          <span class="label">Sent</span>
           <strong id="packets-sent">0</strong>
         </div>
         <div>
-          <span class="label">PC total samples</span>
+          <span class="label">Server</span>
           <strong id="backend-total">—</strong>
         </div>
       </section>
 
-      <section class="card prediction-card">
-        <h2>Live prediction</h2>
+      <section class="hero">
+        <p class="panel-title">Exercise</p>
         <div class="prediction-display">
           <strong id="predict-exercise">—</strong>
           <span id="predict-confidence" class="confidence">—</span>
         </div>
         <p id="predict-status" class="hint" data-type="info">Waiting for data…</p>
-        <p class="hint">Pick exercise below, tap <strong>Start set</strong>, then do your reps. Works even if ML shows Incerto.</p>
         <div class="rep-row">
           <div>
             <span class="label">Reps</span>
@@ -57,7 +56,7 @@
           </div>
           <div class="rep-actions">
             <label>
-              <span class="label">Exercise (reps)</span>
+              <span class="label">Exercise</span>
               <select id="rep-exercise">
                 <option value="squat">Squat</option>
                 <option value="bench">Bench</option>
@@ -79,42 +78,39 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2>Backend</h2>
-        <div class="stats-grid">
-          <div>
-            <span class="label">Last response</span>
-            <strong id="backend-status" data-type="info">—</strong>
+      <p class="panel-title section-label">Sensors</p>
+      <div class="sensor-readouts">
+        <div class="sensor-block">
+          <h3>Accelerometer</h3>
+          <div class="stats-grid three">
+            <div><span class="label">X</span><strong id="acc-x">—</strong></div>
+            <div><span class="label">Y</span><strong id="acc-y">—</strong></div>
+            <div><span class="label">Z</span><strong id="acc-z">—</strong></div>
           </div>
         </div>
-      </section>
-
-      <section class="card">
-        <h2>Accelerometer (m/s²)</h2>
-        <div class="stats-grid three">
-          <div><span class="label">X</span><strong id="acc-x">—</strong></div>
-          <div><span class="label">Y</span><strong id="acc-y">—</strong></div>
-          <div><span class="label">Z</span><strong id="acc-z">—</strong></div>
+        <div class="sensor-block">
+          <h3>Gyroscope</h3>
+          <div class="stats-grid three">
+            <div><span class="label">α</span><strong id="gyro-x">—</strong></div>
+            <div><span class="label">β</span><strong id="gyro-y">—</strong></div>
+            <div><span class="label">γ</span><strong id="gyro-z">—</strong></div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <section class="card">
-        <h2>Gyroscope (deg/s)</h2>
-        <div class="stats-grid three">
-          <div><span class="label">Alpha</span><strong id="gyro-x">—</strong></div>
-          <div><span class="label">Beta</span><strong id="gyro-y">—</strong></div>
-          <div><span class="label">Gamma</span><strong id="gyro-z">—</strong></div>
-        </div>
+      <section class="card chart-card">
+        <h2>Acceleration</h2>
+        <canvas id="motion-chart" class="sensor-chart" aria-label="Live acceleration chart"></canvas>
       </section>
 
       <section class="card chart-card">
-        <h2>Live acceleration</h2>
-        <canvas id="motion-chart" aria-label="Live acceleration chart"></canvas>
+        <h2>Gyroscope</h2>
+        <canvas id="gyro-chart" class="sensor-chart" aria-label="Live gyroscope chart"></canvas>
       </section>
 
       <section class="card" id="record-training-section">
         <h2>Record training set</h2>
-        <p class="hint">Start tracking, pick exercise, record one set, save to PC.</p>
+        <p class="hint">Local server only — save sets for retraining.</p>
         <div class="form-grid">
           <label>
             <span class="label">Exercise</span>
@@ -140,22 +136,16 @@
           </label>
         </div>
         <div class="actions">
-          <button id="record-start-btn" type="button" disabled>Record set</button>
-          <button id="record-save-btn" type="button" disabled>Save to PC</button>
+          <button id="record-start-btn" type="button" disabled>Record</button>
+          <button id="record-save-btn" type="button" disabled>Save</button>
         </div>
-        <p class="hint">Buffered: <strong id="record-count">0 samples</strong></p>
+        <p class="hint"><span id="record-count">0 samples</span></p>
       </section>
 
-      <section class="card tips">
-        <h2>Testing tips</h2>
-        <ul>
-          <li>Use the same WiFi as your PC.</li>
-          <li><strong>iPhone:</strong> open <code>https://&lt;PC-IP&gt;:8000</code> in <strong>Safari</strong> (HTTPS required).</li>
-          <li>Accept the certificate warning, then tap Start and allow motion access.</li>
-          <li>Record 5–10 sets per exercise, same phone position each time.</li>
-          <li>After recording: run <code>make_dataset_phone.py</code> on the PC.</li>
-        </ul>
-      </section>
+      <p class="hint footer-status">
+        <span class="label">Backend</span>
+        <strong id="backend-status" data-type="info">—</strong>
+      </p>
     </main>
 
     <script src="/app.js"></script>

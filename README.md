@@ -6,6 +6,18 @@ O pipeline processa gravações do sensor **MetaMotion (MetaWear)**, extrai feat
 
 ---
 
+## Live tracker (telemóvel)
+
+**Abrir no telemóvel (Safari no iPhone):** [https://ml-fitness-tracker.onrender.com](https://ml-fitness-tracker.onrender.com)
+
+1. Tap **Start** → permitir acesso aos sensores de movimento  
+2. Faz o exercício — o ML mostra o exercício detectado em tempo real  
+3. No plano free do Render, a **primeira visita** após inactividade pode demorar ~1 min a “acordar” o servidor  
+
+Gravação de sets para treino: só no **PC local** (`python src/app/main.py`). Ver [docs/LIVE_TRACKER.md](docs/LIVE_TRACKER.md).
+
+---
+
 ## Objetivos
 
 | Objetivo | Descrição |

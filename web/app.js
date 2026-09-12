@@ -4,8 +4,11 @@ const CHART_PADDING = 24;
 const SEND_INTERVAL_MS = 250;  // max gap between POST /predict (live feel)
 const MIN_SEND_INTERVAL_MS = 200;
 const SEND_BATCH_SIZE = 10;    // also send when this many samples are queued
-const VOTE_REQUIRED = 3;       // consecutive matching predictions before UI updates
-const CONFIDENCE_MIN = 0.55;   // only show exercise above this confidence
+const VOTE_REQUIRED = 3;       // consecutive matching predictions before UI updates (exercises)
+const VOTE_REQUIRED_REST = 5;  // rest is easier to trigger — require more votes
+const CONFIDENCE_MIN = 0.55;   // display threshold (legacy / general UI)
+const CONFIDENCE_MIN_EXERCISE = 0.42; // phone live often peaks ~40–50% on heavy sets
+const CONFIDENCE_MIN_REST = 0.65;     // don't lock "Rest" on brief stillness
 
 // Empty = same server as the page. Set a full URL when we deploy to the cloud.
 const API_URL = "";
@@ -14,6 +17,7 @@ const API_URL = "";
 const state = {
   active: false,
   samples: [],
+  gyroSamples: [],
   sampleTimes: [],
   sendBuffer: [],
   recordBuffer: [],
@@ -37,6 +41,7 @@ const state = {
   repCountingActive: false,
   confirmedExerciseLabel: null,
   recordingEnabled: true,
+  wasWarmingUp: false,
 };
 
 const elements = {
@@ -71,10 +76,12 @@ const elements = {
   recordSaveBtn: document.getElementById("record-save-btn"),
   recordCount: document.getElementById("record-count"),
   recordSection: document.getElementById("record-training-section"),
-  canvas: document.getElementById("motion-chart"),
+  accCanvas: document.getElementById("motion-chart"),
+  gyroCanvas: document.getElementById("gyro-chart"),
 };
 
-const ctx = elements.canvas.getContext("2d");
+const accCtx = elements.accCanvas.getContext("2d");
+const gyroCtx = elements.gyroCanvas.getContext("2d");
 
 function apiBase() {
   return API_URL || window.location.origin;
@@ -113,11 +120,10 @@ function updateRepsUI(data) {
   elements.predictRepTarget.textContent = `/ ${target}`;
   elements.predictRepTarget.dataset.complete =
     state.repCountingActive && state.displayedReps >= target ? "true" : "false";
-  if (elements.predictRepTarget.dataset.complete === "true") {
-    elements.predictRepTarget.style.color = "#4ade80";
-  } else {
-    elements.predictRepTarget.style.color = "";
-  }
+  elements.predictRepTarget.classList.toggle(
+    "rep-target-complete",
+    elements.predictRepTarget.dataset.complete === "true"
+  );
 
   if (data?.set_complete) {
     state.repCountingActive = false;
@@ -206,34 +212,54 @@ function streakFromEnd(label) {
   return streak;
 }
 
+function confidenceMinForLabel(label) {
+  return label === "rest" ? CONFIDENCE_MIN_REST : CONFIDENCE_MIN_EXERCISE;
+}
+
+function votesRequiredForLabel(label) {
+  return label === "rest" ? VOTE_REQUIRED_REST : VOTE_REQUIRED;
+}
+
 function recordVote(data) {
   const label = data.exercise;
   const name = data.exercise_name || label;
   const confidence = data.confidence ?? 0;
+  const minConfidence = confidenceMinForLabel(label);
+  const votesRequired = votesRequiredForLabel(label);
 
-  if (confidence <= CONFIDENCE_MIN) {
-    return { label, name, streak: 0, confirmed: false, lowConfidence: true, confidence };
+  if (confidence <= minConfidence) {
+    return { label, name, streak: 0, confirmed: false, lowConfidence: true, confidence, votesRequired };
   }
 
   state.voteBuffer.push({ label, name, confidence });
-  if (state.voteBuffer.length > VOTE_REQUIRED * 2) {
+
+  // Once "Rest" is shown, switch to an exercise with fewer votes (common after warm-up).
+  if (state.confirmedExerciseLabel === "rest" && label !== "rest") {
+    const streak = streakFromEnd(label);
+    if (streak >= 2) {
+      state.confirmedExerciseLabel = null;
+      state.displayedExercise = null;
+      state.displayedConfidence = null;
+    }
+  }
+  if (state.voteBuffer.length > VOTE_REQUIRED_REST * 2) {
     state.voteBuffer.shift();
   }
 
   const streak = streakFromEnd(label);
-  const confirmed = streak >= VOTE_REQUIRED;
+  const confirmed = streak >= votesRequired;
   if (confirmed) {
-    const recent = state.voteBuffer.slice(-VOTE_REQUIRED);
+    const recent = state.voteBuffer.slice(-votesRequired);
     const avgConfidence =
       recent.reduce((sum, vote) => sum + vote.confidence, 0) / recent.length;
-    if (avgConfidence > CONFIDENCE_MIN) {
+    if (avgConfidence > minConfidence) {
       state.confirmedExerciseLabel = label;
       state.displayedExercise = name;
       state.displayedConfidence = avgConfidence;
     }
   }
 
-  return { label, name, streak, confirmed, lowConfidence: false, confidence };
+  return { label, name, streak, confirmed, lowConfidence: false, confidence, votesRequired };
 }
 
 function updatePredictionUI(data) {
@@ -260,11 +286,16 @@ function updatePredictionUI(data) {
   }
 
   if (data.status === "ok") {
+    if (state.wasWarmingUp) {
+      state.wasWarmingUp = false;
+      resetVoteState();
+    }
+
     const vote = recordVote(data);
     const showExercise =
       state.displayedExercise &&
       state.displayedConfidence != null &&
-      state.displayedConfidence > CONFIDENCE_MIN;
+      state.displayedConfidence > confidenceMinForLabel(state.confirmedExerciseLabel || "bench");
 
     if (showExercise) {
       elements.predictExercise.textContent = state.displayedExercise;
@@ -278,14 +309,14 @@ function updatePredictionUI(data) {
     const pendingChange =
       !vote.lowConfidence &&
       vote.streak > 0 &&
-      vote.streak < VOTE_REQUIRED &&
+      vote.streak < vote.votesRequired &&
       (!state.displayedExercise || vote.name !== state.displayedExercise);
 
     if (vote.lowConfidence) {
-      elements.predictStatus.textContent = "Confiança baixa (<55%)";
+      elements.predictStatus.textContent = `Modelo: ${vote.name} (${Math.round(vote.confidence * 100)}%) — confiança baixa`;
       elements.predictStatus.dataset.type = "info";
     } else if (pendingChange) {
-      elements.predictStatus.textContent = `A confirmar ${vote.name} (${vote.streak}/${VOTE_REQUIRED})…`;
+      elements.predictStatus.textContent = `A confirmar ${vote.name} (${vote.streak}/${vote.votesRequired})…`;
       elements.predictStatus.dataset.type = "info";
     } else if (showExercise) {
       elements.predictStatus.textContent = "Live prediction";
@@ -299,12 +330,18 @@ function updatePredictionUI(data) {
   }
 }
 
+function resizeCanvasElement(canvas, context) {
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio;
+  canvas.width = rect.width * ratio;
+  canvas.height = rect.height * ratio;
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+}
+
 function resizeCanvas() {
-  const rect = elements.canvas.getBoundingClientRect();
-  elements.canvas.width = rect.width * window.devicePixelRatio;
-  elements.canvas.height = rect.height * window.devicePixelRatio;
-  ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
-  drawChart();
+  resizeCanvasElement(elements.accCanvas, accCtx);
+  resizeCanvasElement(elements.gyroCanvas, gyroCtx);
+  drawCharts();
 }
 
 function formatValue(value) {
@@ -390,16 +427,23 @@ function pushSample(event) {
   const now = performance.now();
   updateSampleRate(now);
 
+  const gyro = event.rotationRate;
   state.samples.push({ x: acc.x, y: acc.y, z: acc.z });
+  state.gyroSamples.push({
+    x: gyro?.alpha ?? 0,
+    y: gyro?.beta ?? 0,
+    z: gyro?.gamma ?? 0,
+  });
   state.sampleTimes.push(now);
 
   if (state.samples.length > MAX_SAMPLES) {
     state.samples.shift();
+    state.gyroSamples.shift();
     state.sampleTimes.shift();
   }
 
   elements.sampleCount.textContent = String(state.samples.length);
-  drawChart();
+  drawCharts();
 }
 
 // One predict in flight at a time; apply responses in order (ignore stale ones).
@@ -464,14 +508,14 @@ function stopSendLoop() {
   }
 }
 
-function drawSeries(samples, key, color, min, max, width, height) {
+function drawSeries(context, samples, key, color, min, max, width, height) {
   if (samples.length < 2) {
     return;
   }
 
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.beginPath();
 
   samples.forEach((sample, index) => {
     const x = CHART_PADDING + (index / (MAX_SAMPLES - 1)) * (width - CHART_PADDING * 2);
@@ -479,51 +523,56 @@ function drawSeries(samples, key, color, min, max, width, height) {
     const y = height - CHART_PADDING - normalized * (height - CHART_PADDING * 2);
 
     if (index === 0) {
-      ctx.moveTo(x, y);
+      context.moveTo(x, y);
     } else {
-      ctx.lineTo(x, y);
+      context.lineTo(x, y);
     }
   });
 
-  ctx.stroke();
+  context.stroke();
 }
 
-function drawChart() {
-  const width = elements.canvas.clientWidth;
-  const height = elements.canvas.clientHeight;
+function drawLegend(context, width, labels) {
+  const colors = ["#ef4444", "#22c55e", "#3b82f6"];
+  let offset = width - 88;
+  labels.forEach((label, index) => {
+    context.fillStyle = "#d1d5db";
+    context.font = "12px sans-serif";
+    context.fillText(label, offset, 20);
+    context.fillStyle = colors[index];
+    context.fillText("●", offset + 14, 20);
+    offset += 28;
+  });
+}
 
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#111827";
-  ctx.fillRect(0, 0, width, height);
+function drawTripleChart(canvas, context, samples, labels, valuePadding) {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
 
-  if (state.samples.length === 0) {
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "14px sans-serif";
-    ctx.fillText("Waiting for sensor data...", CHART_PADDING, height / 2);
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#121212";
+  context.fillRect(0, 0, width, height);
+
+  if (samples.length === 0) {
+    context.fillStyle = "#9ca3af";
+    context.font = "14px sans-serif";
+    context.fillText("Waiting for sensor data...", CHART_PADDING, height / 2);
     return;
   }
 
-  const values = state.samples.flatMap((sample) => [sample.x, sample.y, sample.z]);
-  const min = Math.min(...values) - 1;
-  const max = Math.max(...values) + 1;
+  const values = samples.flatMap((sample) => [sample.x, sample.y, sample.z]);
+  const min = Math.min(...values) - valuePadding;
+  const max = Math.max(...values) + valuePadding;
 
-  drawSeries(state.samples, "x", "#ef4444", min, max, width, height);
-  drawSeries(state.samples, "y", "#22c55e", min, max, width, height);
-  drawSeries(state.samples, "z", "#3b82f6", min, max, width, height);
+  drawSeries(context, samples, "x", "#ef4444", min, max, width, height);
+  drawSeries(context, samples, "y", "#22c55e", min, max, width, height);
+  drawSeries(context, samples, "z", "#3b82f6", min, max, width, height);
+  drawLegend(context, width, labels);
+}
 
-  ctx.fillStyle = "#d1d5db";
-  ctx.font = "12px sans-serif";
-  ctx.fillText("X", width - 70, 20);
-  ctx.fillStyle = "#ef4444";
-  ctx.fillText("●", width - 55, 20);
-  ctx.fillStyle = "#d1d5db";
-  ctx.fillText("Y", width - 40, 20);
-  ctx.fillStyle = "#22c55e";
-  ctx.fillText("●", width - 25, 20);
-  ctx.fillStyle = "#d1d5db";
-  ctx.fillText("Z", width - 10, 20);
-  ctx.fillStyle = "#3b82f6";
-  ctx.fillText("●", width + 5, 20);
+function drawCharts() {
+  drawTripleChart(elements.accCanvas, accCtx, state.samples, ["X", "Y", "Z"], 1);
+  drawTripleChart(elements.gyroCanvas, gyroCtx, state.gyroSamples, ["α", "β", "γ"], 5);
 }
 
 // Fired by iOS/Android whenever the IMU has a new sample.
@@ -586,6 +635,7 @@ async function startTracking() {
 
   state.active = true;
   state.samples = [];
+  state.gyroSamples = [];
   state.sampleTimes = [];
   state.sendBuffer = [];
   state.lastSampleMs = null;
@@ -598,6 +648,7 @@ async function startTracking() {
   state.lastAppliedSeq = 0;
   state.predictInFlight = false;
   resetVoteState();
+  state.wasWarmingUp = true;
 
   window.addEventListener("devicemotion", onDeviceMotion);
   startSendLoop();
@@ -606,8 +657,8 @@ async function startTracking() {
   elements.recordStartBtn.disabled = false;
   elements.resetRepsBtn.disabled = false;
   elements.endSetBtn.disabled = true;
-  setStatus("Tracking active. Live predictions ~4×/s after warm-up.", "success");
-  drawChart();
+  setStatus("Tracking active. Move o braço logo após aquecer (~5 s).", "success");
+  drawCharts();
   updateBackendUI(null);
   updatePredictionUI(null);
   updateRepsUI({ reps: 0, rep_target: state.repTarget, counting: false });
