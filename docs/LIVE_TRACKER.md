@@ -252,6 +252,8 @@ Render faz redeploy automático com o modelo novo.
 
 **Meta:** 5–10 sets por exercício, mesma posição do telemóvel, sets ≥15 s.
 
+Os nomes `heavy` / `medium` indicam intenção (~5 / ~10 reps), mas gravações antigas podem não bater certo — isso não afecta o treino ML (só label de exercício), só a validação da contagem de reps.
+
 
 
 ---

@@ -1,4 +1,8 @@
-"""Smoke test live rep counting on a saved phone CSV."""
+"""Smoke test live rep counting on saved phone CSVs.
+
+Phone filenames use heavy/medium (often ~5 / ~10 reps) but actual reps in
+recordings are not verified — output is for regression checks only.
+"""
 
 import sys
 from pathlib import Path
@@ -29,16 +33,16 @@ def load_csv(path):
 
 def main():
     phone = ROOT / "data" / "raw" / "phone"
-    for pattern, label, expected in [
-        ("*squat-heavy*.csv", "squat", 5),
-        ("*bench-heavy*.csv", "bench", 5),
-        ("*dead-heavy*.csv", "dead", 5),
+    for pattern, label in [
+        ("*squat-heavy*.csv", "squat"),
+        ("*bench-heavy*.csv", "bench"),
+        ("*dead-heavy*.csv", "dead"),
     ]:
         csv = sorted(phone.glob(pattern), key=lambda p: p.stat().st_size, reverse=True)[0]
         readings = load_csv(csv)
         resampled = readings_to_resampled_df(readings)
         reps = count_reps_in_df(resampled, label)
-        print(f"{csv.name}: {reps} reps (expected ~{expected})")
+        print(f"{csv.name}: {reps} reps ({label})")
 
 
 if __name__ == "__main__":

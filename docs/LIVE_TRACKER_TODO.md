@@ -49,8 +49,8 @@ Módulo partilhado: `src/features/rep_counting.py` (usado por `live_reps.py`, `c
 - [x] Peak detection + contador no ecrã
 - [x] Start set / End set / target por exercício
 - [x] Unificar lógica batch + live (`rep_counting.py`)
-- [x] Gate de movimento + amplitude ratio (live)
-- [ ] Validar contagem em CSVs phone + ginásio
+- [x] Gates live opcionais (desactivados — só gap entre reps; activar se falsos reps em descanso)
+- [ ] Validar contagem no ginásio (CSVs phone: reps reais nem sempre = heavy/medium no nome)
 
 ---
 

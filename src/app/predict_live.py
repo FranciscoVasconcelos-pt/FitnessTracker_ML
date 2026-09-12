@@ -6,12 +6,7 @@ import pandas as pd
 from pathlib import Path
 
 from live_features import build_feature_row, readings_to_resampled_df
-from live_reps import (
-    RepCounterState,
-    check_movement_detected,
-    peaks_from_df,
-    register_peaks,
-)
+from live_reps import RepCounterState, peaks_from_df, register_peaks
 
 ROOT = Path(__file__).resolve().parents[2]
 MODEL_PATH = ROOT / "models" / "exercise_classifier.pkl"
@@ -51,6 +46,9 @@ class LivePredictor:
         self.buffer.extend(readings)
         if self.rep_counting_active and not self.rep_set_complete:
             self.rep_buffer.extend(readings)
+            if self.rep_state.rep_counting_started_ms <= 0 and readings:
+                times = [r.t if hasattr(r, "t") else r["t"] for r in readings]
+                self.rep_state.rep_counting_started_ms = min(times)
         self._trim_buffer()
         self._trim_rep_buffer()
 
@@ -103,8 +101,10 @@ class LivePredictor:
         return max(r.t if hasattr(r, "t") else r["t"] for r in self.rep_buffer)
 
     def _rep_readings_for_count(self):
-        if self.rep_state.rep_counting_started_ms <= 0:
+        if not self.rep_buffer:
             return []
+        if self.rep_state.rep_counting_started_ms <= 0:
+            return list(self.rep_buffer)
         return [
             r
             for r in self.rep_buffer
@@ -209,12 +209,6 @@ class LivePredictor:
             self.rep_set_complete = True
             return self._rep_status()
 
-        if not self.rep_state.movement_detected:
-            if check_movement_detected(rep_df, self.locked_rep_exercise):
-                self.rep_state.movement_detected = True
-            else:
-                return self._rep_status()
-
         search_from = self._peak_search_start_ms()
         peaks = peaks_from_df(
             rep_df, self.locked_rep_exercise, after_ms=search_from
@@ -240,7 +234,8 @@ class LivePredictor:
             self.locked_rep_exercise = exercise
         self.rep_count = 0
         self.rep_state = RepCounterState()
-        self.rep_state.rep_counting_started_ms = self._latest_reading_time()
+        started = self._latest_reading_time()
+        self.rep_state.rep_counting_started_ms = started if started > 0 else 0
         self.rep_set_complete = False
         self.rep_buffer = []
         self.rep_counting_active = bool(

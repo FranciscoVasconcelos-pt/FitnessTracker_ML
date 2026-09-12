@@ -20,8 +20,9 @@ DEFAULTS = {
     "min_gap_samples": 11,
     "prominence": 0.14,
     "min_peak_gap_ms": 2200,
-    "min_peak_delta": 0.10,
-    "min_amplitude_ratio": 0.40,
+    # Live-only gates (0 = disabled). Tuning: raise if false reps in rest.
+    "min_peak_delta": 0.0,
+    "min_amplitude_ratio": 0.0,
     "movement_std_threshold": 0.035,
     "movement_window_samples": 5,
 }
@@ -36,8 +37,6 @@ REP_CONFIG = {
         "min_gap_samples": 15,
         "prominence": 0.20,
         "min_peak_gap_ms": 3000,
-        "min_peak_delta": 0.12,
-        "min_amplitude_ratio": 0.45,
     },
     "dead": {"cutoff": 0.4, "min_gap_samples": 12, "prominence": 0.15},
 }
@@ -197,9 +196,9 @@ def should_accept_peak(peak_ms, amplitude, state, cfg):
         return False
     if peak_ms in state.counted_peak_times:
         return False
-    if amplitude < cfg["min_peak_delta"]:
+    if cfg["min_peak_delta"] > 0 and amplitude < cfg["min_peak_delta"]:
         return False
-    if state.session_max_amplitude > 0:
+    if cfg["min_amplitude_ratio"] > 0 and state.session_max_amplitude > 0:
         min_amp = cfg["min_amplitude_ratio"] * state.session_max_amplitude
         if amplitude < min_amp:
             return False
