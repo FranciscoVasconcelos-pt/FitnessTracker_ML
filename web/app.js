@@ -1,11 +1,11 @@
 // Config
 const MAX_SAMPLES = 120;       // chart window (last N points)
 const CHART_PADDING = 24;
-const SEND_INTERVAL_MS = 250;  // max gap between POST /predict (live feel)
-const MIN_SEND_INTERVAL_MS = 200;
-const SEND_BATCH_SIZE = 10;    // also send when this many samples are queued
-const VOTE_REQUIRED = 3;       // consecutive matching predictions before UI updates (exercises)
-const VOTE_REQUIRED_REST = 5;  // rest is easier to trigger — require more votes
+const READING_FLUSH_MS = 120;  // upload sensor batches (fast POST /readings)
+const READING_BATCH_SIZE = 6;
+const PREDICT_POLL_MS = 280;   // poll ML separately — not blocked by upload
+const VOTE_REQUIRED = 3;
+const VOTE_REQUIRED_REST = 3;  // was 5: each vote waits for a slow /predict on Render
 const CONFIDENCE_MIN = 0.55;   // display threshold (legacy / general UI)
 const CONFIDENCE_MIN_EXERCISE = 0.42; // phone live often peaks ~40–50% on heavy sets
 const CONFIDENCE_MIN_REST = 0.65;     // don't lock "Rest" on brief stillness
@@ -23,12 +23,13 @@ const state = {
   recordBuffer: [],
   recording: false,
   sendTimer: null,
+  predictTimer: null,
   lastSampleMs: null,
+  lastReadingFlushAt: 0,
   estimatedHz: 0,
   packetsSent: 0,
   lastBackendStatus: null,
   lastPrediction: null,
-  lastSendAt: 0,
   predictRequestSeq: 0,
   lastAppliedSeq: 0,
   predictInFlight: false,
@@ -399,21 +400,43 @@ function storeReading(event) {
     elements.recordCount.textContent = `${state.recordBuffer.length} samples`;
   }
 
-  maybeSendPredict();
+  maybeFlushReadings();
 }
 
-function maybeSendPredict() {
+function maybeFlushReadings() {
   if (!state.active || state.sendBuffer.length === 0) {
     return;
   }
 
   const now = Date.now();
-  const elapsed = now - state.lastSendAt;
-  if (elapsed < MIN_SEND_INTERVAL_MS) {
+  const elapsed = now - state.lastReadingFlushAt;
+  if (elapsed < 80) {
     return;
   }
-  if (state.sendBuffer.length >= SEND_BATCH_SIZE || elapsed >= SEND_INTERVAL_MS) {
-    flushSendBuffer();
+  if (state.sendBuffer.length >= READING_BATCH_SIZE || elapsed >= READING_FLUSH_MS) {
+    flushReadingsOnly();
+  }
+}
+
+async function flushReadingsOnly() {
+  if (!state.active || state.sendBuffer.length === 0) {
+    return;
+  }
+
+  const readings = state.sendBuffer.splice(0);
+  state.lastReadingFlushAt = Date.now();
+
+  try {
+    const response = await fetch(`${apiBase()}/readings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ readings }),
+    });
+    if (!response.ok) {
+      state.sendBuffer.unshift(...readings);
+    }
+  } catch {
+    state.sendBuffer.unshift(...readings);
   }
 }
 
@@ -447,13 +470,11 @@ function pushSample(event) {
 }
 
 // One predict in flight at a time; apply responses in order (ignore stale ones).
-async function flushSendBuffer() {
-  if (state.sendBuffer.length === 0 || state.predictInFlight) {
+async function requestPredict() {
+  if (!state.active || state.predictInFlight) {
     return;
   }
 
-  const readings = state.sendBuffer.splice(0);
-  state.lastSendAt = Date.now();
   state.predictInFlight = true;
   const seq = ++state.predictRequestSeq;
 
@@ -461,7 +482,7 @@ async function flushSendBuffer() {
     const response = await fetch(`${apiBase()}/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ readings }),
+      body: JSON.stringify({ readings: [] }),
     });
 
     if (!response.ok) {
@@ -490,21 +511,28 @@ async function flushSendBuffer() {
     }
   } finally {
     state.predictInFlight = false;
-    if (state.active && state.sendBuffer.length > 0) {
-      flushSendBuffer();
-    }
   }
+}
+
+async function flushPendingData() {
+  await flushReadingsOnly();
+  await requestPredict();
 }
 
 function startSendLoop() {
   stopSendLoop();
-  state.sendTimer = setInterval(flushSendBuffer, SEND_INTERVAL_MS);
+  state.sendTimer = setInterval(maybeFlushReadings, READING_FLUSH_MS);
+  state.predictTimer = setInterval(requestPredict, PREDICT_POLL_MS);
 }
 
 function stopSendLoop() {
   if (state.sendTimer != null) {
     clearInterval(state.sendTimer);
     state.sendTimer = null;
+  }
+  if (state.predictTimer != null) {
+    clearInterval(state.predictTimer);
+    state.predictTimer = null;
   }
 }
 
@@ -643,7 +671,7 @@ async function startTracking() {
   state.packetsSent = 0;
   state.lastBackendStatus = null;
   state.lastPrediction = null;
-  state.lastSendAt = 0;
+  state.lastReadingFlushAt = 0;
   state.predictRequestSeq = 0;
   state.lastAppliedSeq = 0;
   state.predictInFlight = false;
@@ -676,7 +704,7 @@ async function stopTracking() {
   state.active = false;
   window.removeEventListener("devicemotion", onDeviceMotion);
   stopSendLoop();
-  await flushSendBuffer();
+  await flushPendingData();
   elements.startBtn.disabled = false;
   elements.stopBtn.disabled = true;
   elements.recordStartBtn.disabled = true;

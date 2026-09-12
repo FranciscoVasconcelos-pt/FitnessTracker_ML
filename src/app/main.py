@@ -65,6 +65,16 @@ app = FastAPI(title="ML Fitness Tracker Live")
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
+@app.on_event("startup")
+def preload_predictor():
+    """Load ML models at boot so the first /predict is not extra slow on Render."""
+    try:
+        get_live_predictor()
+        print("LivePredictor preloaded.")
+    except Exception as exc:
+        print(f"LivePredictor preload skipped: {exc}")
+
+
 # Shape of the JSON the phone sends every time stamp.
 # Pydantic rejects bad payloads before our handler runs.
 class Reading(BaseModel):
@@ -78,7 +88,7 @@ class Reading(BaseModel):
 
 
 class SensorPayload(BaseModel):
-    readings: List[Reading]
+    readings: List[Reading] = Field(default_factory=list)
 
 
 class SensorResponse(BaseModel):
@@ -242,12 +252,37 @@ def receive_sensor(payload: SensorPayload):
     )
 
 
+@app.post("/readings")
+def append_readings(payload: SensorPayload):
+    """Fast path: append sensor batch without running ML (used by hosted UI)."""
+    if not payload.readings:
+        raise HTTPException(status_code=400, detail="No readings in batch.")
+
+    try:
+        predictor = get_live_predictor()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Predictor not ready: {exc}. Run save_model.py first.",
+        ) from exc
+
+    global total_samples_received
+    count = len(payload.readings)
+    total_samples_received += count
+    predictor.add_readings(payload.readings)
+
+    return {
+        "status": "ok",
+        "received": count,
+        "total_samples": total_samples_received,
+        "buffer_samples": len(predictor.buffer),
+    }
+
+
 @app.post("/predict", response_model=PredictResponse)
 def predict_exercise(payload: SensorPayload):
     global total_samples_received, total_packets_received
 
-    count = len(payload.readings)
-    total_samples_received += count
     total_packets_received += 1
 
     try:
@@ -258,8 +293,15 @@ def predict_exercise(payload: SensorPayload):
             detail=f"Predictor not ready: {exc}. Run save_model.py first.",
         ) from exc
 
-    predictor.add_readings(payload.readings)
+    if payload.readings:
+        total_samples_received += len(payload.readings)
+        predictor.add_readings(payload.readings)
+
+    started = time.perf_counter()
     result = predictor.predict()
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    if elapsed_ms > 400:
+        print(f"[live] predict took {elapsed_ms}ms")
     log_prediction(result)
 
     return PredictResponse(
