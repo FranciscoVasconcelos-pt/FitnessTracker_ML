@@ -1,356 +1,385 @@
 # Live Tracker — Guia de uso
 
-Tracker em tempo real com **sensores do telemóvel** + **página web** + **backend Python no PC** (mesma WiFi).
 
-**Estado atual:** gravar sets no telemóvel para re-treinar o mesmo `exercise_classifier.pkl`.
 
-Roadmap completo: [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md)
+Tracker em tempo real: **sensores do telemóvel** → **página web** → **backend Python** (PC local ou Render).
 
----
 
-## O que é a “Opção C”?
 
-Ao planear o ML live, considerámos três abordagens (detalhe em [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md#opções-para-ml-no-telemóvel-a-b-c)):
+**URL live:** [https://ml-fitness-tracker.onrender.com](https://ml-fitness-tracker.onrender.com)  
 
-- **Opção A** — usar o modelo MetaMotion actual no telemóvel sem re-treinar (pipeline pesado no PC; pouco fiável no iPhone).
-- **Opção B** — criar um modelo simples novo só para live (rápido, mas o teu modelo actual ficaria à margem).
-- **Opção C** ✅ — **gravar exercícios com o telemóvel**, correr o **mesmo pipeline** que já tens (`remove_outliers` → `build_features` → `save_model.py`) e **substituir** `exercise_classifier.pkl` por uma versão treinada com os teus dados.
+**Roadmap:** [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md)
 
-Em resumo: **não jogamos fora o modelo anterior** — usamo-lo como referência offline e re-treinamos a mesma arquitectura (Random Forest + features completas) com gravações do iPhone. Por isso o site tem “Record set” / “Save to PC” e o script `make_dataset_phone.py`.
+
 
 ---
 
-## Pré-requisitos
 
-| Requisito | Detalhe |
-|---|---|
-| PC com Python | Ambiente conda `tracking-barbell-exercises` |
-| Telemóvel | iPhone (Safari) ou Android (Chrome) |
-| Rede | PC e telemóvel na **mesma WiFi** |
-| OpenSSL | Necessário para gerar certificado HTTPS (já incluído no Git for Windows ou instalável separadamente) |
+
+## Estado actual
+
+
+
+| Componente | Estado |
+
+|------------|--------|
+
+| Sensores + gráficos acc/gyro | Feito |
+
+| ML live (~93% holdout phone) | Feito |
+
+| Hosting Render + HTTPS | Feito |
+
+| Gravação para treino | Feito (só PC local) |
+
+| Contagem de reps | Parcial — afinação pendente |
+
+
 
 ---
 
-## Instalação
 
-### 1. Ativar o ambiente conda
+
+## Modo local (PC + WiFi)
+
+
+
+### Arrancar
+
+
 
 ```bash
+
 conda activate tracking-barbell-exercises
+
 cd MLFitnessTracker
-```
 
-### 2. Instalar dependências do servidor web
-
-Se ainda não instalaste FastAPI e Uvicorn:
-
-```bash
-pip install fastapi "uvicorn[standard]"
-```
-
-Estas dependências também estão listadas no `environment.yml`.
-
----
-
-## Como arrancar
-
-### 1. Iniciar o servidor
-
-Na raiz do projeto:
-
-```bash
 python src/app/main.py
-```
-
-(`serve_web.py` também funciona — é um alias.)
-
-O terminal mostra algo como:
 
 ```
-HTTPS is required for iPhone motion sensors.
-Open on this PC:  https://127.0.0.1:8000
-Open on iPhone:   https://192.168.1.95:8000  (use Safari)
-On iPhone: accept the certificate warning, then tap Start.
-Press Ctrl+C to stop.
-```
 
-Na primeira execução, o script gera automaticamente certificados em `certs/` (ignorados pelo Git).
 
-### 2. Abrir no telemóvel
 
-Usa o URL **HTTPS** que o script imprime — substitui pelo IP do teu PC:
+Abre no iPhone (**Safari**): `https://<IP-do-PC>:8000`  
 
-```
-https://192.168.1.95:8000
-```
+Aceita o certificado auto-assinado → **Start** → permitir motion.
 
-> **Importante:** usa `https://`, não `http://`. No iPhone, HTTP bloqueia os sensores de movimento.
 
-### 3. iPhone (Safari)
 
-1. Abre o URL no **Safari** (não Chrome — sensores limitados noutros browsers iOS)
-2. Aparece aviso de certificado → **Mostrar detalhes** → **Visitar este website**
-3. Toca **Start**
-4. Quando pedido, toca **Permitir** (acesso a movimento e orientação)
-5. Move o telemóvel — o gráfico e os valores acc/gyro devem atualizar
+### Modo cloud (Render)
 
-### 4. Android (Chrome)
 
-1. Abre `https://<IP-do-PC>:8000` no Chrome
-2. Aceita o aviso de certificado se aparecer
-3. Toca **Start** e move o telemóvel
+
+Abre [https://ml-fitness-tracker.onrender.com](https://ml-fitness-tracker.onrender.com) no Safari.  
+
+Não precisas de PC ligado; precisas de WiFi ou dados móveis.
+
+
+
+**Free tier:** primeira visita após inactividade pode demorar ~30–60 s (cold start).
+
+
 
 ---
 
-## O que deves ver
 
-| Elemento | Descrição |
-|---|---|
-| **Sample rate** | Taxa de amostragem estimada (~30–60 Hz, depende do telemóvel) |
-| **Buffer size** | Número de amostras no gráfico (máx. 120) |
-| **Accelerometer** | `acc_x`, `acc_y`, `acc_z` em m/s² |
-| **Gyroscope** | Rotação alpha / beta / gamma em deg/s |
-| **Gráfico live** | Três linhas (X vermelho, Y verde, Z azul) |
-| **Packets sent** | Quantos buffers enviados ao PC (~1.5 s cada) |
-| **PC total samples** | Total de leituras recebidas pelo backend |
-| **Last response** | `ok` se o PC respondeu ao último envio |
 
-No terminal do PC deves ver linhas como:
+## UI — o que vês
 
-```
-POST /sensor: 45 readings (acc_z 9.81 → 10.12, total 450)
-```
 
-Experimenta posições diferentes (braço, bolso, mão) e anota qual dá sinal mais estável — isso será útil nas fases de gravação e re-treino.
+
+| Secção | Descrição |
+
+|--------|-----------|
+
+| **Start / Stop** | Liga sensores e envio ao servidor |
+
+| **Stats** | Sample rate, buffer, pacotes enviados |
+
+| **Exercise** | Exercício detectado pelo ML (com votação) |
+
+| **Reps** | Contador manual por exercício (Start set) |
+
+| **Sensors** | Valores acc/gyro em tempo real |
+
+| **Gráficos** | Aceleração + giroscópio (últimas ~120 amostras) |
+
+| **Record** | Só visível no PC local — grava CSV para treino |
+
+
 
 ---
 
-## Fase 2 — fluxo de dados
+
+
+## Fluxo de dados (actual)
+
+
 
 ```
-iPhone sensores → devicemotion (local)
-                      ↓
-                 sendBuffer (JS)
-                      ↓  fetch POST ~1.5 s
-                 PC FastAPI /sensor
-                      ↓
-                 {"status": "ok", "received": N, ...}
+
+iPhone DeviceMotion
+
+       ↓
+
+  web/app.js
+
+       ↓ POST /readings  (~8×/s, upload rápido)
+
+       ↓ POST /predict   (~3×/s, ML + reps)
+
+  FastAPI (main.py)
+
+       ↓
+
+  LivePredictor → exercise_classifier.pkl
+
 ```
 
-Formato enviado pelo telemóvel:
+
+
+Formato de cada leitura:
+
+
 
 ```json
+
 {
-  "readings": [
-    {
-      "t": 1730000000123,
-      "acc_x": 0.12,
-      "acc_y": -0.05,
-      "acc_z": 9.81,
-      "gyro_x": 1.2,
-      "gyro_y": 0.0,
-      "gyro_z": -0.3
-    }
-  ]
+
+  "t": 1730000000123,
+
+  "acc_x": 0.12,
+
+  "acc_y": -0.05,
+
+  "acc_z": 9.81,
+
+  "gyro_x": 1.2,
+
+  "gyro_y": 0.0,
+
+  "gyro_z": -0.3
+
 }
+
 ```
 
-Para hosting cloud (Fase 6), edita `API_URL` no topo de `web/app.js`:
 
-```javascript
-const API_URL = "https://your-app.onrender.com";
-```
+
+`API_URL` em `web/app.js` fica `""` (same origin) — funciona igual em local e Render.
+
+
 
 ---
 
-## Gravar e re-treinar (Opção C)
 
-O modelo MetaMotion (~99%) mantém-se para offline/baseline (`predict_model.py`). Para o telemóvel, gravamos **os teus** dados e re-treinamos o **mesmo** pipeline — ver secção [O que é a Opção C?](#o-que-é-a-opção-c) acima.
 
-### Gravar um set no iPhone
+## ML live — como interpretar
 
-1. **Start** (tracking activo)
-2. Escolhe exercício + categoria (heavy / medium)
-3. **Record set** — faz o exercício (5 ou 10 reps)
-4. **Save to PC** — CSV guardado em `data/raw/phone/`
 
-No terminal do PC:
 
-```
-POST /record: saved 312 samples → user-squat-heavy-20260909_154500.csv
-```
+1. **Warm-up ~5 s** após Start — buffer a encher
 
-### Processar e re-treinar (PC)
+2. **Votação** — 3 previsões seguidas iguais para confirmar exercício
+
+3. **Rest** — limiar mais alto (evita bloquear em descanso antes do set)
+
+4. Move o braço **logo após** aquecer para não confirmar Rest parado
+
+
+
+---
+
+
+
+## Reps (Start set)
+
+
+
+1. Escolhe exercício no dropdown (independente do ML)
+
+2. **Start set** — começa a contar picos no acelerómetro
+
+3. **End set** — para manualmente
+
+
+
+A contagem usa `rep_counting.py` (lowpass + picos + gate de movimento/amplitude). Validar no ginásio — ver [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md#fase-4--reps-live).
+
+
+
+---
+
+
+
+## Gravar e re-treinar (Opção C — só local)
+
+
+
+1. `python src/app/main.py` no PC
+
+2. **Start** → **Record** → fazer set → **Save**
+
+3. CSV em `data/raw/phone/`
+
+
+
+Pipeline:
+
+
 
 ```bash
-conda activate tracking-barbell-exercises
-cd MLFitnessTracker
 
-# 1. Ingestão phone → pkl @ 5 Hz
 python src/data/make_dataset_phone.py
 
-# 2. Copiar para o nome que o pipeline espera (ou editar os scripts)
 copy data\interim\01_data_processed_phone.pkl data\interim\01_data_processed.pkl
 
-# 3. Pipeline normal
 python src/features/remove_outliers.py
+
 python src/features/build_features.py
+
 python src/models/save_model.py
+
+git add models/*.pkl && git commit -m "Retrain" && git push
+
 ```
 
-O `exercise_classifier.pkl` fica re-treinado com dados do telemóvel. Depois ligamos `/predict` live (próximo passo).
 
-**Meta de gravação:** 5–10 sets por exercício, **sempre a mesma posição** do telemóvel.
+
+Render faz redeploy automático com o modelo novo.
+
+
+
+**Meta:** 5–10 sets por exercício, mesma posição do telemóvel, sets ≥15 s.
+
+
 
 ---
 
-## Parar o servidor
 
-No terminal onde o servidor está a correr:
 
-```
-Ctrl+C
-```
+## Local vs cloud
+
+
+
+| | PC local | Render |
+
+|--|----------|--------|
+
+| URL | `https://<IP-PC>:8000` | https://ml-fitness-tracker.onrender.com |
+
+| Gravação treino | Sim | Não (desactivada) |
+
+| HTTPS | Certificado local | Automático |
+
+| Latência ML | Baixa | ~0,3–1 s por `/predict` |
+
+
+
+Variável `ENABLE_RECORDING`: activa por defeito local; `false` no Docker/Render.
+
+
 
 ---
+
+
+
+## Deploy / actualizar Render
+
+
+
+1. Push para GitHub (`main`)
+
+2. Render rebuild automático (~5–15 min)
+
+3. Testar `/health` → `"predictor_ready": true`
+
+
+
+Ficheiros: `Dockerfile`, `render.yaml`, `requirements.txt`.
+
+
+
+---
+
+
 
 ## Resolução de problemas
 
-### Porta 8000 já em uso
 
-```
-ERROR: [Errno 10048] ... bind on address ('0.0.0.0', 8000)
-```
 
-Outra instância do servidor ainda está ativa. Liberta a porta:
+### iPhone: sensores não funcionam
+
+- Usa **Safari** e **HTTPS**
+
+- Aceita certificado (local) ou abre URL Render
+
+
+
+### ML preso em Rest
+
+- Move-te logo após warm-up
+
+- Confirma que o modelo está actualizado no Render
+
+
+
+### Porta 8000 ocupada (local)
+
+
 
 ```powershell
+
 netstat -ano | findstr :8000
-taskkill /PID <numero_do_PID> /F
-```
 
-Depois volta a correr `python src/app/serve_web.py`.
-
-### iPhone: "DeviceMotion is not supported"
-
-Causas habituais:
-
-| Causa | Solução |
-|---|---|
-| URL em HTTP | Usa `https://` |
-| Browser errado | Usa **Safari** |
-| Certificado não aceite | Aceita o aviso antes de tocar Start |
-
-### Permissão negada
-
-Toca **Start** outra vez e escolhe **Permitir**. Se negaste antes, pode ser preciso ir a **Definições → Safari → Movimento e orientação** e reativar.
-
-### Telemóvel não abre a página
-
-- Confirma que PC e telemóvel estão na mesma WiFi
-- Verifica se o **Firewall do Windows** permite ligações entrantes na porta 8000
-- Confirma o IP do PC: `ipconfig` → adaptador WiFi → IPv4
-
-### Erro ao gerar certificado (OpenSSL)
-
-O script precisa do comando `openssl` no PATH. Instala [Git for Windows](https://git-scm.com/) (inclui OpenSSL) ou OpenSSL standalone. Depois apaga `certs/` e volta a correr o servidor.
-
----
-
-## Estrutura de ficheiros
+taskkill /PID <PID> /F
 
 ```
-web/
-├── index.html      # UI mobile
-├── app.js          # DeviceMotion + gráfico
-└── style.css       # Estilos
 
-src/app/
-└── serve_web.py    # FastAPI + HTTPS + servir ficheiros estáticos
 
-certs/              # Gerado localmente (não vai para o GitHub)
-├── key.pem         # Chave privada
-├── cert.pem        # Certificado público
-└── openssl.cnf     # Config OpenSSL
+
+### Cold start lento (Render)
+
+- Espera ~1 min na 1.ª visita, ou usa [UptimeRobot](https://uptimerobot.com) em `/health`
+
+
+
+---
+
+
+
+## Estrutura
+
+
+
 ```
 
----
+web/           index.html, app.js, style.css
 
-## Hosting vs local — gravação de treino
+src/app/       main.py, predict_live.py, live_features.py, live_reps.py
+src/features/  rep_counting.py (lógica partilhada de reps)
 
-| Onde | Gravação | HTTPS |
-|------|----------|-------|
-| **PC local** (`python src/app/main.py`) | Activada | Certificado auto-assinado (`certs/`) |
-| **Cloud** (Render, Railway, Docker) | **Desactivada** por defeito | HTTPS do hosting |
+models/        exercise_classifier.pkl, live_artifact.pkl
 
-No cloud, a secção “Record training set” fica escondida e `POST /record` devolve 403. Treinas sempre no PC local.
+data/raw/phone/  CSVs gravados (local)
 
-Para forçar gravação no cloud (não recomendado): `ENABLE_RECORDING=true`.
+docs/          LIVE_TRACKER.md, LIVE_TRACKER_TODO.md
 
----
+Dockerfile     deploy Render
 
-## Deploy no Render (recomendado)
-
-Precisas do repo no **GitHub** com `models/exercise_classifier.pkl` e `models/live_artifact.pkl` commitados.
-
-### Opção A — Blueprint (mais fácil)
-
-1. [render.com](https://render.com) → **New** → **Blueprint**
-2. Liga o repo GitHub → Render lê `render.yaml`
-3. Deploy → obténs um URL tipo `https://ml-fitness-tracker-xxxx.onrender.com`
-4. No iPhone (**Safari**): abre esse URL → Start → allow motion
-
-### Opção B — Web Service manual
-
-1. **New** → **Web Service** → repo GitHub
-2. **Runtime:** Docker
-3. **Instance type:** Free
-4. Env var: `ENABLE_RECORDING=false` (já vem no Dockerfile)
-5. **Health check path:** `/health`
-6. Deploy
-
-### Testar localmente o Docker (opcional)
-
-```bash
-docker build -t ml-fitness-tracker .
-docker run -p 8000:8000 ml-fitness-tracker
 ```
 
-Abre `http://127.0.0.1:8000` no PC. No iPhone precisas de HTTPS real (Render) para sensores.
 
-### Railway (alternativa)
-
-1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
-2. Deteta o `Dockerfile` automaticamente
-3. Gera URL HTTPS → abre no Safari
-
-### Frontend / API_URL
-
-O site e a API estão no **mesmo servidor** — `API_URL` em `web/app.js` fica `""` (same origin). Não precisas de alterar nada para Render.
-
-### Notas importantes
-
-- **Free tier:** o serviço “adormece” após ~15 min sem uso; a primeira abertura demora ~30–60 s (cold start).
-- **Ginásio:** precisas de **WiFi ou dados móveis** — o telemóvel fala com a cloud, não com o PC em casa.
-- **Actualizar modelo:** re-treinas no PC → commit + push dos `.pkl` → Render faz redeploy (ou manual deploy).
-- **Reps:** o contador live funciona, mas ainda precisa de afinação; ML live é o foco do host.
 
 ---
 
-## Segurança e Git
 
-A pasta `certs/` está no `.gitignore`. **Não commits** `key.pem` nem `cert.pem` — são gerados automaticamente em cada máquina. Os certificados auto-assinados são só para desenvolvimento local.
 
----
+## Segurança
 
-## Estado do projecto
 
-| Fase | Estado |
-|------|--------|
-| Sensores + backend local | ✅ |
-| Gravar + re-treinar (Opção C) | ✅ (~93% holdout) |
-| ML live | ✅ |
-| Reps live | ⚠️ precisa afinação |
-| Hosting | ✅ ficheiros prontos — falta deploy no Render |
 
-Ver [LIVE_TRACKER_TODO.md](LIVE_TRACKER_TODO.md).
+`certs/` está no `.gitignore` — nunca commits chaves privadas.  
+
+Gravação de treino desactivada no host público para não misturar dados de terceiros com os teus CSVs curados.
+

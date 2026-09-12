@@ -2,7 +2,7 @@
 
 Projeto de aprendizagem em **Machine Learning aplicado a sensores wearables** para reconhecer exercícios de ginásio e contar repetições a partir de dados de acelerómetro e giroscópio.
 
-O pipeline processa gravações do sensor **MetaMotion (MetaWear)**, extrai features temporais e de frequência, treina um classificador Random Forest para identificar o exercício em curso e usa deteção de picos para estimar o número de reps por set.
+O pipeline processa gravações do **MetaMotion (MetaWear)** e do **telemóvel (iPhone)**, extrai features temporais e de frequência, treina um Random Forest para identificar o exercício em curso e usa deteção de picos para estimar reps por set. O tracker live está deployado em [https://ml-fitness-tracker.onrender.com](https://ml-fitness-tracker.onrender.com).
 
 ---
 
@@ -56,18 +56,22 @@ Os dados brutos estão em `data/raw/MetaMotion/MetaMotion/` e consistem em fiche
 ```
 MLFitnessTracker/
 ├── data/
-│   ├── raw/              # CSVs originais (MetaMotion)
-│   └── interim/          # Artefactos intermédios (.pkl) gerados pelo pipeline
+│   ├── raw/
+│   │   ├── MetaMotion/   # CSVs originais (sensor wearable)
+│   │   └── phone/        # CSVs gravados no iPhone (Opção C)
+│   └── interim/          # Artefactos intermédios (.pkl)
 ├── models/
-│   └── exercise_classifier.pkl   # Modelo treinado (gerado por save_model.py)
+│   ├── exercise_classifier.pkl   # Modelo treinado (phone + pipeline)
+│   └── live_artifact.pkl         # PCA/KMeans para inferência live
 ├── reports/
 │   └── figures/          # Gráficos exportados
 ├── references/
 │   └── folder_structure.txt
 ├── src/
 │   ├── data/
-│   │   ├── make_dataset.py       # Ingestão, merge e reamostragem
-│   │   └── visualize.py          # Exploração visual dos dados
+│   │   ├── make_dataset.py       # Ingestão MetaMotion
+│   │   ├── make_dataset_phone.py # Ingestão CSVs do telemóvel
+│   │   └── visualize.py
 │   ├── features/
 │   │   ├── remove_outliers.py    # Deteção e remoção de outliers
 │   │   ├── build_features.py     # Feature engineering
@@ -81,7 +85,10 @@ MLFitnessTracker/
 │   │   ├── predict_model.py      # Inferência com modelo guardado
 │   │   └── LearningAlgorithms.py # Wrapper dos classificadores sklearn
 │   ├── app/
-│   │   ├── main.py               # FastAPI: HTTPS + POST /sensor (Fase 2+)
+│   │   ├── main.py               # FastAPI: /predict, /readings, /record
+│   │   ├── predict_live.py       # ML + reps live
+│   │   ├── live_features.py      # Features em tempo real
+│   │   ├── live_reps.py          # Contagem de reps (live)
 │   │   └── serve_web.py          # Alias para main.py
 │   └── visualization/
 │       └── plot_settings.py
@@ -111,29 +118,22 @@ MLFitnessTracker/
 
 O pipeline segue o livro *Machine Learning for the Quantified Self* (Hoogendoorn & Funk): abstrações temporais, FFT, PCA e classificação sobre dados de sensores IMU.
 
-### Live tracker (tempo real — Opção B)
+### Live tracker (tempo real — Opção C)
 
-Sem hardware MetaMotion, o tracker em tempo real usa **telemóvel + browser + backend local no PC**:
+Telemóvel + browser + backend Python (local ou [Render](https://ml-fitness-tracker.onrender.com)):
 
-| Tecnologia | Papel | Porquê |
-|---|---|---|
-| **HTML / CSS / JavaScript (vanilla)** | Frontend mobile | Sem build tools nem app nativa; abre no browser do telemóvel; fácil de iterar |
-| **`DeviceMotionEvent` API** | Sensores no browser | Acede ao acelerómetro e giroscópio do telemóvel sem App Store / Google Play |
-| **Canvas API** | Gráfico live | Desenho leve de acc_x/y/z no ecrã, sem bibliotecas externas |
-| **FastAPI** | Backend Python | API REST moderna; na Fase 2+ recebe buffers de sensores e corre inferência ML |
-| **Uvicorn** | Servidor ASGI | Servir a página web e endpoints com baixa latência |
-| **HTTPS (certificado auto-assinado)** | Ligação segura | **Obrigatório no iPhone/Safari** — a Apple só expõe sensores de movimento em contexto seguro (`https://` ou `localhost`) |
-| **OpenSSL** | Certificados locais | Gera `certs/key.pem` e `certs/cert.pem` automaticamente ao arrancar o servidor |
+| Tecnologia | Papel |
+|---|---|
+| **HTML / CSS / JavaScript** | UI mobile, gráficos acc/gyro, votação ML |
+| **`DeviceMotionEvent`** | Acelerómetro + giroscópio no browser |
+| **FastAPI + Uvicorn** | `/readings`, `/predict`, `/record` (local) |
+| **Docker + Render** | Hosting HTTPS com modelo em produção |
+| **HTTPS** | Obrigatório no iPhone (local: cert auto-assinado; cloud: Render) |
 
-**Porquê esta arquitetura?**
-
-- **Sem MetaMotion:** o telemóvel substitui o sensor wearable; qualquer pessoa pode testar em casa.
-- **Sem app nativa:** evita Swift/Kotlin, publicação em lojas e permissões complexas — o browser já tem acesso aos sensores (com HTTPS no iOS).
-- **Backend no PC (mesma WiFi):** para desenvolvimento não é preciso hosting cloud; na Fase 6 migra-se para Render/Railway mudando só o `API_URL`.
-- **FastAPI + Python:** reutiliza o mesmo ecossistema do pipeline ML (pandas, sklearn, scipy) para inferência live nas fases seguintes.
+Modelo re-treinado com dados do telemóvel (`make_dataset_phone.py` → mesmo pipeline → `save_model.py`).
 
 > Guia de instalação e uso: **[docs/LIVE_TRACKER.md](docs/LIVE_TRACKER.md)**  
-> Estratégia ML no telemóvel (**Opção C** — gravar dados e re-treinar o mesmo modelo): **[docs/LIVE_TRACKER_TODO.md](docs/LIVE_TRACKER_TODO.md#opções-para-ml-no-telemóvel-a-b-c)**
+> Estratégia ML no telemóvel (**Opção C** — gravar dados e re-treinar o mesmo modelo): **[docs/LIVE_TRACKER_TODO.md](docs/LIVE_TRACKER_TODO.md#opção-c-resumo)**
 
 ---
 

@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from DataTransformation import LowPassFilter
+from rep_counting import count_reps_in_set, get_rep_config, peaks_from_df
 from scipy.signal import argrelextrema
 from sklearn.metrics import mean_absolute_error
 
@@ -82,33 +83,45 @@ LowPass.low_pass_filter(
 
 
 # --------------------------------------------------------------
-# Create function to count repetitions
+# Count repetitions (shared rep_counting module)
 # --------------------------------------------------------------
-def count_reps(dataset, cutoff=0.4, order=10, column="acc_r", show_plot=False):
-    data = LowPass.low_pass_filter(
-        dataset, col=column, sampling_frequency=fs, cutoff_frequency=cutoff, order=order
-    )
-    indexes = argrelextrema(data[column + "_lowpass"].values, np.greater)
-    peaks = data.iloc[indexes]
+def count_reps(dataset, exercise=None, show_plot=False):
+    label = exercise or dataset["label"].iloc[0]
+    reps = count_reps_in_set(dataset, label)
 
     if show_plot:
+        cfg = get_rep_config(label)
+        column = cfg["column"]
+        data = LowPass.low_pass_filter(
+            dataset,
+            col=column,
+            sampling_frequency=fs,
+            cutoff_frequency=cfg["cutoff"],
+            order=10,
+        )
+        peak_times = {ms for ms, _ in peaks_from_df(dataset, label)}
+        peak_mask = [
+            int(ts.timestamp() * 1000) in peak_times for ts in data.index
+        ]
+        peaks = data[peak_mask]
+
         fig, ax = plt.subplots()
         plt.plot(data[f"{column}_lowpass"])
         plt.plot(peaks[f"{column}_lowpass"], "o", color="red")
         ax.set_ylabel(f"{column}_lowpass")
-        exercise = dataset["label"].iloc[0].title()
+        exercise_name = label.title()
         category = dataset["category"].iloc[0].title()
-        plt.title(f"{category} {exercise}: {len(peaks)} Reps")
+        plt.title(f"{category} {exercise_name}: {reps} Reps")
         plt.close(fig)
 
-    return len(peaks)
+    return reps
 
 
-count_reps(bench_set, cutoff=0.4)
-count_reps(squat_set, cutoff=0.35)
-count_reps(row_set, cutoff=0.65, column="gyro_x")
-count_reps(ohp_set, cutoff=0.35)
-count_reps(dead_set, cutoff=0.4)
+count_reps(bench_set)
+count_reps(squat_set)
+count_reps(row_set)
+count_reps(ohp_set)
+count_reps(dead_set)
 # --------------------------------------------------------------
 # Create benchmark dataframe
 # --------------------------------------------------------------
@@ -119,21 +132,8 @@ rep_df["reps_pred"] = 0
 
 for s in df["set"].unique():
     subset = df[df["set"] == s]
-
-    column = "acc_r"
-    cutoff = 0.4
-
-    if subset["label"].iloc[0] == "squat":
-        cutoff = 0.38
-
-    if subset["label"].iloc[0] == "row":
-        cutoff = 0.50
-
-    if subset["label"].iloc[0] == "ohp":
-        cutoff = 0.45
-
-    reps = count_reps(subset, cutoff=cutoff, column=column)
-
+    label = subset["label"].iloc[0]
+    reps = count_reps_in_set(subset, label)
     rep_df.loc[rep_df["set"] == s, "reps_pred"] = reps
 
 rep_df
