@@ -2,7 +2,7 @@
 
 Projeto de aprendizagem em **Machine Learning aplicado a sensores wearables** para reconhecer exercícios de ginásio e contar repetições a partir de dados de acelerómetro e giroscópio.
 
-O pipeline processa gravações do **MetaMotion (MetaWear)** e do **telemóvel (iPhone)**, extrai features temporais e de frequência, treina um Random Forest para identificar o exercício em curso e usa deteção de picos para estimar reps por set. O tracker live está deployado em [https://ml-fitness-tracker.onrender.com](https://ml-fitness-tracker.onrender.com).
+O pipeline processa gravações do **MetaMotion (MetaWear)** e do **telemóvel (iPhone)**, extrai features temporais e de frequência, treina um Random Forest para identificar o exercício em curso e usa deteção de picos para estimar reps por set. O tracker live está deployado em [https://ml-fitness-tracker.onrender.com](https://ml-fitness-tracker.onrender.com). (Possivel delay devido ao free trial do Render)
 
 ---
 
